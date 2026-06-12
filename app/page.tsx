@@ -1,65 +1,94 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+
+export default function HomePage() {
+  const router = useRouter()
+
+  useEffect(() => {
+    const keysToRemove = [
+      'valam_name', 'valam_age', 'valam_income', 'valam_savings',
+      'valam_investments', 'valam_knowledge', 'valam_goal', 'valam_result'
+    ]
+    keysToRemove.forEach(key => sessionStorage.removeItem(key))
+    localStorage.removeItem('valam_profile_id')
+  }, [])
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+    <main style={{ minHeight: '100vh', background: '#1a0f0a',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      padding: '40px 24px', textAlign: 'center' }}>
+
+      <div style={{ fontFamily: "'Playfair Display', serif",
+        fontSize: '2rem', color: '#c9a84c', fontWeight: 700,
+        marginBottom: '48px', letterSpacing: '4px' }}>
+        VALAM ★
+      </div>
+
+      <h1 style={{ fontFamily: "'Playfair Display', serif",
+        fontSize: 'clamp(2rem, 5vw, 3.5rem)', color: '#f5f0e8',
+        fontWeight: 700, marginBottom: '24px', lineHeight: 1.2,
+        maxWidth: '700px' }}>
+        Your Journey to Wealth Creation Starts Here
+      </h1>
+
+      <p style={{ fontFamily: "'Cormorant Garamond', serif",
+        fontSize: '1.2rem', color: 'rgba(245,240,232,0.7)',
+        maxWidth: '560px', lineHeight: 1.7, marginBottom: '56px' }}>
+        Investing is not about being rich — it is about being free.
+        Discover your financial stage and get a personalised roadmap
+        built for Indian investors.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr',
+        gap: '16px', maxWidth: '560px', width: '100%',
+        marginBottom: '32px' }}>
+        {[
+          { icon: '📊', title: 'Discover Your Financial Stage',
+            desc: 'Know exactly where you stand' },
+          { icon: '🗺️', title: 'Get Your Roadmap',
+            desc: 'Personalised steps to grow wealth' },
+          { icon: '💡', title: 'India-First Advice',
+            desc: 'SIP, ELSS, NPS, PPF — done right' },
+          { icon: '🎯', title: '8 Wealth Levels',
+            desc: 'From Seed to Legend' },
+        ].map((item) => (
+          <div key={item.title} style={{
+            background: 'rgba(245,240,232,0.06)',
+            border: '1px solid rgba(201,168,76,0.25)',
+            borderRadius: '12px', padding: '20px',
+            textAlign: 'left' }}>
+            <div style={{ fontSize: '1.5rem', marginBottom: '8px' }}>
+              {item.icon}
+            </div>
+            <div style={{ fontFamily: 'Inter, sans-serif',
+              fontWeight: 600, color: '#f5f0e8', fontSize: '0.9rem',
+              marginBottom: '4px' }}>{item.title}</div>
+            <div style={{ fontFamily: 'Inter, sans-serif',
+              color: 'rgba(245,240,232,0.5)', fontSize: '0.8rem' }}>
+              {item.desc}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={() => router.push('/onboarding/step1')}
+        style={{ padding: '18px 56px',
+          background: 'linear-gradient(135deg, #f0d080 0%, #c9a84c 40%, #a07828 100%)',
+          border: 'none', borderRadius: '50px', cursor: 'pointer',
+          fontFamily: 'Inter, sans-serif', fontWeight: 700,
+          fontSize: '1.1rem', color: '#2a1a0e',
+          boxShadow: '0 4px 24px rgba(201,168,76,0.3)' }}>
+        Get Started →
+      </button>
+
+      <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.8rem',
+        color: 'rgba(245,240,232,0.3)', marginTop: '24px' }}>
+        Free · No login required · Takes 2 minutes
+      </p>
+    </main>
+  )
 }

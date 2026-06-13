@@ -31,15 +31,15 @@ export default function HomePage() {
         fontSize: 'clamp(2rem, 5vw, 3.5rem)', color: '#f5f0e8',
         fontWeight: 700, marginBottom: '24px', lineHeight: 1.2,
         maxWidth: '700px' }}>
-        Your Journey to Wealth Creation Starts Here
+        Your Journey to Unlock Your Financial Potential
       </h1>
 
       <p style={{ fontFamily: "'Cormorant Garamond', serif",
         fontSize: '1.2rem', color: 'rgba(245,240,232,0.7)',
         maxWidth: '560px', lineHeight: 1.7, marginBottom: '56px' }}>
-        Investing is not about being rich — it is about being free.
-        Discover your financial stage and get a personalised roadmap
-        built for Indian investors.
+        Investing isn't for the rich; it's for anyone who wants financial freedom.
+        Join the top 10% of Indians who actively invest by building wealth through
+        this smart, safe, and personalized journey.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr',

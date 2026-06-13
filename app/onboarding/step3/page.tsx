@@ -67,11 +67,11 @@ export default function Step3() {
 
         <h2 style={{ fontFamily:"'Playfair Display', serif", fontSize:'1.8rem',
           color:'#2a1a0e', marginBottom:'8px', textAlign:'center' }}>
-          Your financial snapshot
+          We'll tailor your financial roadmap based on your investing knowledge
         </h2>
         <p style={{ fontFamily:"'Cormorant Garamond', serif", color:'#5a3e28',
           textAlign:'center', marginBottom:'40px' }}>
-          Approximate answers are perfectly fine
+          Your data is secure with us and used only to personalize your financial journey.
         </p>
 
         {[

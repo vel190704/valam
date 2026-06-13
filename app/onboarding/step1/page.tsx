@@ -40,14 +40,21 @@ export default function Step1() {
           ))}
         </div>
 
+        <div style={{ textAlign:'center', marginBottom:'20px' }}>
+          <p style={{ fontFamily:"'Playfair Display', serif", fontSize:'1.1rem',
+            color:'#8b6914', fontStyle:'italic', lineHeight:1.5, margin:0 }}>
+            Time is your greatest financial asset.
+          </p>
+          <p style={{ fontFamily:"'Cormorant Garamond', serif", fontSize:'0.95rem',
+            color:'#5a3e28', marginTop:'6px', lineHeight:1.5, margin:'6px 0 0 0' }}>
+            Your age helps us personalize your financial journey and future potential
+          </p>
+        </div>
+
         <h2 style={{ fontFamily:"'Playfair Display', serif", fontSize:'1.8rem',
           color:'#2a1a0e', marginBottom:'8px', textAlign:'center' }}>
           Tell us about yourself
         </h2>
-        <p style={{ fontFamily:"'Cormorant Garamond', serif", color:'#5a3e28',
-          textAlign:'center', marginBottom:'40px', fontSize:'1rem' }}>
-          This helps us calculate your financial stage
-        </p>
 
         <div style={{ marginBottom:'24px' }}>
           <label style={{ fontFamily:'Inter, sans-serif', fontWeight:600,
@@ -80,10 +87,6 @@ export default function Step1() {
               fontFamily:'Inter, sans-serif', fontSize:'1rem',
               color:'#2a1a0e', outline:'none', boxSizing:'border-box' }}
           />
-          <p style={{ fontFamily:'Inter, sans-serif', fontSize:'0.8rem',
-            color:'#8b6914', marginTop:'6px' }}>
-            ✦ This helps us calculate your wealth velocity and financial stage
-          </p>
         </div>
 
         <button

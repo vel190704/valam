@@ -60,8 +60,8 @@ export default function Step2() {
                 transition:'all 0.2s' }}>
               <span style={{ fontSize:'1.8rem' }}>{exp.icon}</span>
               <div style={{ flex:1 }}>
-                <div style={{ fontFamily:'Inter, sans-serif', fontWeight:600,
-                  color:'#2a1a0e', marginBottom:'2px' }}>{exp.label}</div>
+                <div style={{ fontFamily:'Inter, sans-serif', fontWeight:700,
+                  color:'#2a1a0e', marginBottom:'2px' }}><strong>{exp.label}</strong></div>
                 <div style={{ fontFamily:'Inter, sans-serif', fontSize:'0.85rem',
                   color:'#5a3e28' }}>{exp.detail}</div>
               </div>

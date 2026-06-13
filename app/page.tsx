@@ -16,10 +16,66 @@ export default function HomePage() {
   }, [])
 
   return (
-    <main style={{ minHeight: '100vh', background: '#1a0f0a',
-      display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      padding: '40px 24px', textAlign: 'center' }}>
+    <main
+  style={{
+    position: 'relative',
+    minHeight: '100vh',
+    background: '#1a0f0a',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '100px 24px 40px',
+    textAlign: 'center'
+  }}
+>
+
+     <div
+  style={{
+    position: 'absolute',
+    top: '20px',
+    right: '20px',
+    display: 'flex',
+    gap: '10px',
+    zIndex: 10
+  }}
+>
+  <button
+    onClick={() => router.push('/login')}
+    style={{
+      padding: '10px 20px',
+      background: 'transparent',
+      border: '1px solid rgba(201,168,76,0.5)',
+      borderRadius: '999px',
+      color: '#f5f0e8',
+      cursor: 'pointer',
+      fontFamily: 'Inter, sans-serif',
+      fontWeight: 600,
+      fontSize: '0.95rem'
+    }}
+  >
+    Login
+  </button>
+
+  <button
+    onClick={() => router.push('/signup')}
+    style={{
+      padding: '10px 20px',
+      background:
+        'linear-gradient(135deg, #f0d080 0%, #c9a84c 40%, #a07828 100%)',
+      border: 'none',
+      borderRadius: '999px',
+      color: '#2a1a0e',
+      cursor: 'pointer',
+      fontFamily: 'Inter, sans-serif',
+      fontWeight: 700,
+      fontSize: '0.95rem',
+      boxShadow: '0 4px 16px rgba(201,168,76,0.25)'
+    }}
+  >
+    Sign Up
+  </button>
+</div>   
 
       <div style={{ fontFamily: "'Playfair Display', serif",
         fontSize: '2rem', color: '#c9a84c', fontWeight: 700,
@@ -37,7 +93,7 @@ export default function HomePage() {
       <p style={{ fontFamily: "'Cormorant Garamond', serif",
         fontSize: '1.2rem', color: 'rgba(245,240,232,0.7)',
         maxWidth: '560px', lineHeight: 1.7, marginBottom: '56px' }}>
-        Investing isn't for the rich; it's for anyone who wants financial freedom.
+        Investing isn&apos;t for the rich, it&apos;s for anyone who wants financial freedom.
         Join the top 10% of Indians who actively invest by building wealth through
         this smart, safe, and personalized journey.
       </p>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState,useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -17,34 +17,82 @@ export default function LoginPage() {
 
   const inputStyle =
     "w-full px-4 py-3 rounded-xl bg-transparent border border-[#c9a84c]/40 text-[#f5f0e8] placeholder:text-[#f5f0e8]/40 focus:outline-none focus:ring-2 focus:ring-[#c9a84c] transition";
+ useEffect(() => {
+  const checkSession = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-  const handleLogin = async () => {
-    setError("");
-    if(!emailRegex.test(email))
-      return setError("Enter a valid email");
+    if (session) {
+      router.replace('/');
+    }
+  };
 
-    if(password.length < 8)
-      return setError("Password should contain atleast 8 characters");
-    try{
-      setLoading(true);
-      const { data,error } = await supabase.auth.signInWithPassword({
+  checkSession();
+}, [router]);
+
+const handleLogin = async () => {
+  setError("");
+
+  if (!emailRegex.test(email))
+    return setError("Enter a valid email");
+
+  if (password.length < 8)
+    return setError("Password should contain atleast 8 characters");
+
+  try {
+    setLoading(true);
+
+    const { data, error } =
+      await supabase.auth.signInWithPassword({
         email,
-        password
+        password,
       });
-      
-      if(error)
-        return setError(error.message);
-      if(!data.user.email_confirmed_at)
-        return setError("Please verify your email before logging in.");
-      router.push('/dashboard');
+
+    if (error)
+      return setError(error.message);
+
+    if (!data.user.email_confirmed_at)
+      return setError(
+        "Please verify your email before logging in."
+      );
+
+    const user = data.user;
+
+    const {
+      data: profile,
+      error: profileError,
+    } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.log(profileError);
     }
-    catch{
-      setError("Something went wrong");
+
+    if (!profile) {
+      const { error: insertError } =
+        await supabase
+          .from("profiles")
+          .insert({
+            id: user.id,
+            name: user.user_metadata.name,
+            age: user.user_metadata.age,
+          });
+
+      if (insertError) {
+        console.log(insertError);
+      }
     }
-    finally{
-      setLoading(false);
-    }
+    router.push("/");
+  } catch {
+    setError("Something went wrong");
+  } finally {
+    setLoading(false);
   }
+}
   return (
     <main className="min-h-screen bg-[#1a0f0a] flex flex-col items-center justify-center px-6 py-10">
       <div className="font-serif text-3xl sm:text-4xl font-bold tracking-[4px] text-[#c9a84c] mb-8">

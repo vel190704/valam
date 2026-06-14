@@ -60,7 +60,7 @@ export default function SignupPage() {
       return;
     }
     console.log(data);
-    alert("Verification email sent! Please verify your email.");
+    alert("If this email is not yet registered with us, you will recieve an verification email.");
     router.push('/login');
   }
   catch(err){

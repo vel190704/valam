@@ -62,6 +62,7 @@ background:'#c9a84c',
 color:'#1a0f0a',
 fontWeight:700,
 fontSize:'1rem',
+fontFamily:'serif',
 cursor:'pointer'
 }}
 >
@@ -166,7 +167,13 @@ Sign Up
       </div>
 
       <button
-        onClick={() => router.push('/onboarding/step1')}
+         onClick={() => {
+    if (session) {
+      router.push('/dashboard')
+    } else {
+      router.push('/onboarding/step1')
+    }
+  }}
         style={{ padding: '18px 56px',
           background: 'linear-gradient(135deg, #f0d080 0%, #c9a84c 40%, #a07828 100%)',
           border: 'none', borderRadius: '50px', cursor: 'pointer',

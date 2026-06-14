@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { VALAMResult } from '@/lib/valam'
 import type { Recommendation, GoalKey } from '@/lib/recommendations'
+import { supabase } from "@/lib/supabase";
 
 interface DashboardData {
   name: string
@@ -90,29 +91,39 @@ export default function DashboardPage() {
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null)
   const [loading, setLoading]       = useState(true)
 
-  useEffect(() => {
+ useEffect(() => {
     async function load() {
-      const profileId = localStorage.getItem('valam_profile_id')
-      if (profileId) {
-        try {
-          const res = await fetch(`/api/profile?id=${encodeURIComponent(profileId)}`)
-          if (res.ok) {
-            const json = await res.json() as ProfileAPIResponse
-            const p = json.profile
-            setData({
-              name: p.name, valamScore: p.valamScore,
-              valamLevel: p.valamLevel, valamLevelName: p.valamLevelName,
-              goal: p.goal, investments: p.investments,
-              breakdown: p.breakdown,
-            })
-            setRecommendation(p.recommendation)
-            setDataSource('live')
-            setLoading(false)
-            return
+      try {
+        // 1. Let Supabase securely read and parse the user ID from localStorage
+        const { data: { session } } = await supabase.auth.getSession()
+        const profileId = session?.user?.id
+
+        if (profileId) {
+          try {
+            const res = await fetch(`/api/profile?id=${encodeURIComponent(profileId)}`)
+            if (res.ok) {
+              const json = await res.json() as ProfileAPIResponse
+              const p = json.profile
+              setData({
+                name: p.name, valamScore: p.valamScore,
+                valamLevel: p.valamLevel, valamLevelName: p.valamLevelName,
+                goal: p.goal, investments: p.investments,
+                breakdown: p.breakdown,
+              })
+              setRecommendation(p.recommendation)
+              setDataSource('live')
+              setLoading(false)
+              return
+            }
+          } catch(error) { 
+            console.error("Frontend fetch failed entirely:", error) 
           }
-        } catch { /* fall through */ }
+        }
+      } catch (authError) {
+        console.error("Failed to retrieve Supabase session:", authError)
       }
 
+      // 2. Fallback to sessionStorage if no authenticated database profile is found
       try {
         const raw         = sessionStorage.getItem('valam_result')
         const name        = sessionStorage.getItem('valam_name')
@@ -138,7 +149,7 @@ export default function DashboardPage() {
       } catch { /* both sources failed */ }
       setLoading(false)
     }
-    void load()
+    load()
   }, [])
 
   if (loading) return (
@@ -176,26 +187,59 @@ export default function DashboardPage() {
     <main style={{ minHeight: '100vh', background: '#1a0f0a',
       padding: '40px 24px 120px' }}>
       <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+    
+    {/* Header */}
+    <div style={{ 
+      position: 'relative',        // Anchor point for absolute centering
+      display: 'flex', 
+      justifyContent: 'flex-end',  // Automatically pushes the status badge to the right edge
+      alignItems: 'center', 
+      minHeight: '40px',           // Gives a consistent baseline alignment height
+      marginBottom: '40px' 
+    }}>
+      
+      {/* Title - Locked to exact horizontal center of the 900px container */}
+      <div style={{ 
+        position: 'absolute',
+        left: '50%',
+        transform: 'translateX(-50%)', // Centers the text relative to its own width
+        fontFamily: "'Playfair Display', serif",
+        fontSize: 'clamp(1.4rem, 4vw, 1.8rem)', // Responsive sizing across mobile & desktop
+        color: '#c9a84c', 
+        fontWeight: 700,
+        letterSpacing: '0.05em',
+        whiteSpace: 'nowrap'          // Prevents the text from wrapping tightly on small phones
+      }}>
+        VALAM ★
+      </div>
 
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between',
-          alignItems: 'center', marginBottom: '40px' }}>
-          <div style={{ fontFamily: "'Playfair Display', serif",
-            fontSize: '1.8rem', color: '#c9a84c', fontWeight: 700 }}>
-            VALAM ★
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px',
-            fontFamily: 'Inter, sans-serif', fontSize: '0.8rem',
-            background: 'rgba(245,240,232,0.1)', borderRadius: '20px',
-            padding: '4px 12px', border: '1px solid rgba(201,168,76,0.3)' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%',
-              background: dataSource === 'live' ? '#4caf50' : '#ffc107',
-              display: 'inline-block' }}></span>
-            <span style={{ color: '#f5f0e8' }}>
-              {dataSource === 'live' ? 'Live' : 'Local'}
-            </span>
-          </div>
-        </div>
+      {/* Status Badge - Pushed to the right, sitting smoothly on top of layout layer */}
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: '6px',
+        fontFamily: 'Inter, sans-serif', 
+        fontSize: '0.8rem',
+        background: 'rgba(245,240,232,0.1)', 
+        borderRadius: '20px',
+        padding: '4px 12px', 
+        border: '1px solid rgba(201,168,76,0.3)',
+        zIndex: 2                    // Keeps badge clickable/hoverable above background lines
+      }}>
+        <span style={{ 
+          width: '8px', 
+          height: '8px', 
+          borderRadius: '50%',
+          background: dataSource === 'live' ? '#4caf50' : '#ffc107',
+          display: 'inline-block' 
+        }}></span>
+        <span style={{ color: '#f5f0e8' }}>
+          {dataSource === 'live' ? 'Live' : 'Local'}
+        </span>
+      </div>
+
+    </div>
+
 
         <h1 style={{ fontFamily: "'Playfair Display', serif",
           fontSize: '2rem', color: '#f5f0e8', marginBottom: '8px' }}>

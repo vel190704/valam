@@ -3,16 +3,14 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
-import { Session } from "@supabase/supabase-js";
+import { fetchCurrentUser, type AuthUser } from '@/lib/backend-api'
 
 export default function HomePage() {
   const router = useRouter()
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   useEffect(() => {
     const getSession = async () => {
-    const { data } = await supabase.auth.getSession();
-    setSession(data.session);
+    setUser(await fetchCurrentUser());
   }
   getSession();
     const keysToRemove = [
@@ -37,81 +35,6 @@ export default function HomePage() {
     textAlign: 'center'
   }}
 >
-
-     <div
-  style={{
-    position: 'absolute',
-    top: '20px',
-    right: '20px',
-    display: 'flex',
-    gap: '10px',
-    zIndex: 10
-  }}
->
-  {
-session ?
-(
-<button
-onClick={() => router.push('/profile')}
-style={{
-width:'42px',
-height:'42px',
-borderRadius:'50%',
-border:'none',
-background:'#c9a84c',
-color:'#1a0f0a',
-fontWeight:700,
-fontSize:'1rem',
-fontFamily:'serif',
-cursor:'pointer'
-}}
->
-{
-session.user.email
-?.charAt(0)
-.toUpperCase()
-}
-</button>
-)
-:
-(
-<>
-<button
-onClick={() => router.push('/login')}
-style={{
-padding:'10px 20px',
-background:'transparent',
-border:'1px solid rgba(201,168,76,0.5)',
-borderRadius:'999px',
-color:'#f5f0e8',
-cursor:'pointer',
-fontWeight:600,
-fontSize:'0.95rem'
-}}
->
-Login
-</button>
-
-<button
-onClick={() => router.push('/signup')}
-style={{
-padding:'10px 20px',
-background:'linear-gradient(135deg,#f0d080 0%,#c9a84c 40%,#a07828 100%)',
-border:'none',
-borderRadius:'999px',
-color:'#2a1a0e',
-cursor:'pointer',
-fontWeight:700,
-fontSize:'0.95rem',
-boxShadow:'0 4px 16px rgba(201,168,76,0.25)'
-}}
->
-Sign Up
-</button>
-</>
-)
-}
-</div>   
 
       <div style={{ fontFamily: "'Playfair Display', serif",
         fontSize: '2rem', color: '#c9a84c', fontWeight: 700,
@@ -168,11 +91,12 @@ Sign Up
 
       <button
          onClick={() => {
-    if (session) {
-      router.push('/dashboard')
-    } else {
+    if (!user) {
       router.push('/onboarding/step1')
+      return
     }
+
+    router.push('/dashboard')
   }}
         style={{ padding: '18px 56px',
           background: 'linear-gradient(135deg, #f0d080 0%, #c9a84c 40%, #a07828 100%)',
@@ -180,7 +104,7 @@ Sign Up
           fontFamily: 'Inter, sans-serif', fontWeight: 700,
           fontSize: '1.1rem', color: '#2a1a0e',
           boxShadow: '0 4px 24px rgba(201,168,76,0.3)' }}>
-        Get Started →
+        {user ? 'Go to Dashboard ->' : 'Get Started ->'}
       </button>
 
       <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.8rem',

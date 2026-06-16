@@ -35,13 +35,13 @@ const LEVEL_NAMES: Record<number, string> = {
 }
 
 function getLevel(score: number): number {
-  if (score < 1.5) return 1
-  if (score < 2.0) return 2
-  if (score < 2.5) return 3
-  if (score < 3.0) return 4
-  if (score < 3.5) return 5
-  if (score < 4.0) return 6
-  if (score < 4.5) return 7
+  if (score < 2.0) return 1
+  if (score < 3.0) return 2
+  if (score < 4.0) return 3
+  if (score < 5.0) return 4
+  if (score < 6.0) return 5
+  if (score < 7.0) return 6
+  if (score < 8.0) return 7
   return 8
 }
 

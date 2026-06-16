@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { fetchCurrentProfile, fetchCurrentUser, logout } from '@/lib/backend-api'
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -14,18 +14,17 @@ export default function ProfilePage() {
   } | null>(null)
   useEffect(() => {
     async function getUser() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
+      const currentUser = await fetchCurrentUser()
 
-      if (!session) {
+      if (!currentUser) {
         router.replace('/login')
         return
       }
+      const profile = await fetchCurrentProfile().catch(() => null)
       setUser({
-        email: session.user.email || '',
-        name: session.user.user_metadata.name || '',
-        age: session.user.user_metadata.age || 0,
+        email: currentUser.email || '',
+        name: profile?.name || currentUser.name || '',
+        age: profile?.age || currentUser.age || 0,
       })
       setLoading(false)
     }
@@ -33,7 +32,7 @@ export default function ProfilePage() {
   }, [router])
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    logout()
     router.replace('/login')
   }
 
@@ -47,7 +46,7 @@ export default function ProfilePage() {
     )
   }
   return (
-    <main className="min-h-screen bg-[#1a0f0a] px-6 py-10 flex flex-col items-center">
+    <main className="min-h-screen bg-[#1a0f0a] px-4 py-28 sm:px-6 lg:px-8 flex flex-col items-center">
 
       {/* Logo */}
       <div className="font-serif text-3xl sm:text-4xl font-bold tracking-[4px] text-[#c9a84c] mb-10">
@@ -58,12 +57,12 @@ export default function ProfilePage() {
       <div className="
         w-full
         max-w-lg
-        rounded-3xl
+        rounded-2xl
         border border-[#c9a84c]/30
         bg-[#25160f]
         shadow-2xl
         shadow-[#c9a84c]/10
-        p-8
+        p-6 sm:p-8
       ">
 
         {/* Avatar */}

@@ -1,13 +1,28 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { fetchCurrentProfile, isLoggedIn } from '@/lib/backend-api'
 
 export default function Step1() {
   const router = useRouter()
   const [name, setName] = useState('')
   const [age, setAge]   = useState('')
-
   useEffect(() => {
+   async function checkUser() {
+
+    if (isLoggedIn()) {
+      const profile = await fetchCurrentProfile().catch(() => null)
+        if (profile) {
+
+  setName(profile.name ?? '')
+
+  setAge(profile.age?.toString() ?? '')
+
+}
+    }
+  }
+  checkUser()
+
     const keysToRemove = ['valam_name','valam_age','valam_income',
       'valam_savings','valam_investments','valam_knowledge','valam_goal','valam_result']
     keysToRemove.forEach(k => sessionStorage.removeItem(k))
@@ -24,11 +39,10 @@ export default function Step1() {
   }
 
   return (
-    <main style={{ minHeight:'100vh', background:'#1a0f0a',
-      display:'flex', alignItems:'center', justifyContent:'center', padding:'24px' }}>
+    <main className="flex min-h-screen items-center justify-center bg-[#1a0f0a] px-4 py-28 sm:px-6 lg:px-8">
       <div style={{ background:'rgba(245,240,232,0.95)', borderRadius:'20px',
-        padding:'48px 40px', maxWidth:'480px', width:'100%',
-        border:'1px solid rgba(201,168,76,0.3)' }}>
+        border:'1px solid rgba(201,168,76,0.3)' }}
+        className="w-full max-w-[480px] px-5 py-8 sm:px-10 sm:py-12">
 
         {/* Progress dots */}
         <div style={{ display:'flex', justifyContent:'center', gap:'8px', marginBottom:'48px' }}>

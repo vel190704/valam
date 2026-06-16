@@ -1,17 +1,7 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Link from "next/link";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
   title: "ValamHQ",
@@ -26,38 +16,13 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className="h-full antialiased"
     >
-      <body className="min-h-full flex flex-col">
-
-        {/* Logo */}
-
-        <Link
-          href="/"
-          className="
-            fixed
-            top-5
-            left-5
-            z-50
-            w-11
-            h-11
-            rounded-full
-            flex
-            items-center
-            justify-center
-            bg-[#c9a84c]
-            text-[#1a0f0a]
-            text-xl
-            font-bold
-            shadow-lg
-            hover:scale-105
-            transition
-            font-serif
-          "
-        >
-          V
-        </Link>
-      {children}</body>
+      <body className="min-h-full flex flex-col bg-[#1a0f0a]">
+        <Navbar />
+        <div className="flex-1">{children}</div>
+        <Footer />
+      </body>
     </html>
   );
 }

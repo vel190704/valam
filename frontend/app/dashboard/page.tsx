@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { VALAMResult } from '@/lib/valam'
-import type { Recommendation, GoalKey } from '@/lib/recommendations'
-import { supabase } from "@/lib/supabase";
+import type { Recommendation } from '@/lib/recommendations'
+import { fetchCurrentProfile, fetchRecommendation } from '@/lib/backend-api'
 
 interface DashboardData {
   name: string
@@ -19,21 +19,6 @@ interface DashboardData {
     incomeScore: number
     experienceScore: number
     ageScore: number
-  }
-}
-
-interface ProfileAPIResponse {
-  profile: {
-    id: string; name: string; age: number; income: string
-    savingsRate: string; investments: string; experience: string
-    goal: string; valamScore: number; valamLevel: number
-    valamLevelName: string
-    breakdown: {
-      savingsScore: number; investmentsScore: number; incomeScore: number
-      experienceScore: number; ageScore: number
-    }
-    createdAt: string
-    recommendation: Recommendation
   }
 }
 
@@ -94,16 +79,8 @@ export default function DashboardPage() {
  useEffect(() => {
     async function load() {
       try {
-        // 1. Let Supabase securely read and parse the user ID from localStorage
-        const { data: { session } } = await supabase.auth.getSession()
-        const profileId = session?.user?.id
-
-        if (profileId) {
-          try {
-            const res = await fetch(`/api/profile?id=${encodeURIComponent(profileId)}`)
-            if (res.ok) {
-              const json = await res.json() as ProfileAPIResponse
-              const p = json.profile
+              const p = await fetchCurrentProfile()
+              if (p?.valamScore) {
               setData({
                 name: p.name, valamScore: p.valamScore,
                 valamLevel: p.valamLevel, valamLevelName: p.valamLevelName,
@@ -115,15 +92,10 @@ export default function DashboardPage() {
               setLoading(false)
               return
             }
-          } catch(error) { 
-            console.error("Frontend fetch failed entirely:", error) 
-          }
-        }
-      } catch (authError) {
-        console.error("Failed to retrieve Supabase session:", authError)
+      } catch (profileError) {
+        console.error("Failed to retrieve saved profile:", profileError)
       }
 
-      // 2. Fallback to sessionStorage if no authenticated database profile is found
       try {
         const raw         = sessionStorage.getItem('valam_result')
         const name        = sessionStorage.getItem('valam_name')
@@ -138,13 +110,7 @@ export default function DashboardPage() {
             breakdown: parsed.breakdown,
           })
           setDataSource('local')
-          const recRes = await fetch(
-            `/api/recommendations?level=${parsed.valamLevel}&goal=${encodeURIComponent(goal ?? 'wealth')}`
-          )
-          if (recRes.ok) {
-            const recJson = await recRes.json() as { recommendation: Recommendation }
-            setRecommendation(recJson.recommendation)
-          }
+          setRecommendation(await fetchRecommendation(parsed.valamLevel, goal ?? 'wealth'))
         }
       } catch { /* both sources failed */ }
       setLoading(false)
@@ -185,7 +151,7 @@ export default function DashboardPage() {
 
   return (
     <main style={{ minHeight: '100vh', background: '#1a0f0a',
-      padding: '40px 24px 120px' }}>
+      padding: '104px 24px 120px' }}>
       <div style={{ maxWidth: '900px', margin: '0 auto' }}>
     
     {/* Header */}

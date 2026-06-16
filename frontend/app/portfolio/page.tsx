@@ -36,11 +36,19 @@ const CSS = `
     --green:#4A7A4A; --red:#C0392B;
   }
   body.dark {
-    --bg:#1A0F0A; --surface:#231308; --surface2:#2A1A0E;
-    --border:rgba(201,168,76,0.18); --border-md:rgba(201,168,76,0.32);
-    --gold:#C9A84C; --gold-lt:#F0D080; --bronze:#8B6914;
-    --muted:#B89A72; --text:#F5F0E8; --text-sm:#D4C4A8;
-    --green:#4CAF50; --red:#E57373;
+    --bg:#231512;
+    --surface:#2C1A16;
+    --surface2:#3A2218;
+    --border:rgba(201,168,76,0.15);
+    --border-md:rgba(201,168,76,0.28);
+    --gold:#C9A84C;
+    --gold-lt:#F0D080;
+    --bronze:#8B6914;
+    --muted:#B89A72;
+    --text:#F5F0E8;
+    --text-sm:#D4C4A8;
+    --green:#4CAF50;
+    --red:#E57373;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:var(--bg);color:var(--text);font-family:Inter,sans-serif;}

@@ -78,10 +78,19 @@ const CSS = `
     --muted:#7A6E5F; --text:#1E1C18; --text-sm:#3A3630; --green:#4A7A4A; --red:#C0392B;
   }
   body.dark {
-    --bg:#1A0F0A; --surface:#231308; --surface2:#2A1A0E;
-    --border:rgba(201,168,76,0.18); --border-md:rgba(201,168,76,0.28);
-    --gold:#C9A84C; --gold-lt:#F0D080; --bronze:#8B6914;
-    --muted:#B89A72; --text:#F5F0E8; --text-sm:#D4C4A8; --green:#4CAF50; --red:#E57373;
+    --bg:#231512;
+    --surface:#2C1A16;
+    --surface2:#3A2218;
+    --border:rgba(201,168,76,0.15);
+    --border-md:rgba(201,168,76,0.28);
+    --gold:#C9A84C;
+    --gold-lt:#F0D080;
+    --bronze:#8B6914;
+    --muted:#B89A72;
+    --text:#F5F0E8;
+    --text-sm:#D4C4A8;
+    --green:#4CAF50;
+    --red:#E57373;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:var(--bg);color:var(--text);font-family:Inter,sans-serif;}
@@ -405,14 +414,42 @@ export default function DashboardPage() {
 
         {/* STATS ROW */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 12, marginBottom: 14 }}>
-          <div style={{ background: 'var(--surface)', borderRadius: 18, padding: '18px 20px',
-            border: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
-              textTransform: 'uppercase', fontWeight: 500, marginBottom: 8 }}>Investments</div>
-            <div style={{ fontFamily: 'Playfair Display,serif', fontSize: 22, color: 'var(--text)' }}>
-              ₹{data.investments}
+          <div
+            onClick={() => router.push('/portfolio')}
+            style={{ background:'var(--surface)',
+              borderRadius:18, padding:'18px 20px',
+              border:'1px solid var(--border)',
+              cursor:'pointer',
+              transition:'border-color .15s, box-shadow .15s' }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--gold)'
+              ;(e.currentTarget as HTMLDivElement).style.boxShadow =
+                '0 0 0 2px rgba(184,146,74,0.12)'
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLDivElement).style.borderColor =
+                'rgba(180,155,110,0.18)'
+              ;(e.currentTarget as HTMLDivElement).style.boxShadow = 'none'
+            }}>
+            <div style={{ fontSize:10, color:'var(--muted)',
+              letterSpacing:'.45px', textTransform:'uppercase',
+              fontWeight:500, marginBottom:8 }}>
+              Investments
             </div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>current range</div>
+            <div style={{ fontFamily:'Playfair Display,serif',
+              fontSize:22, color:'var(--text)', marginBottom:4 }}>
+              {portfolioTotal > 0
+                ? formatPortfolioAmt(portfolioTotal)
+                : '₹0'}
+            </div>
+            <div style={{ fontSize:11, color:'var(--muted)', marginBottom:10 }}>
+              {portfolioTotal > 0
+                ? `${investments.length} entries tracked`
+                : 'No entries yet'}
+            </div>
+            <div style={{ fontSize:11, color:'var(--gold)', fontWeight:600 }}>
+              {portfolioTotal > 0 ? 'Manage Portfolio →' : '+ Add Investments →'}
+            </div>
           </div>
 
           <div style={{ background: 'var(--surface)', borderRadius: 18, padding: '18px 20px',
@@ -512,92 +549,111 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* BOTTOM 3-COL GRID */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr 1fr', gap: 12 }}>
+        {/* ── BOTTOM 3-COL GRID ── */}
+        <div style={{ display:'grid',
+          gridTemplateColumns:'1fr 1.4fr 1fr',
+          gap:12 }}>
 
-          {/* Current Investments — clickable card → /portfolio */}
+          {/* ── COL 1: NET WORTH ── */}
           <div
-            onClick={() => router.push('/portfolio')}
-            style={{ background: 'var(--surface)', borderRadius: 18, padding: '18px 20px',
-              border: '1px solid var(--border)', cursor: 'pointer',
-              transition: 'border-color .15s, box-shadow .15s', position: 'relative' }}
+            onClick={() => router.push('/networth')}
+            style={{ background:'var(--surface)',
+              borderRadius:18, padding:'18px 20px',
+              border:'1px solid var(--border)',
+              cursor:'pointer',
+              transition:'border-color .15s, box-shadow .15s',
+              display:'flex', flexDirection:'column',
+              justifyContent:'space-between' }}
             onMouseEnter={e => {
-              ;(e.currentTarget as HTMLDivElement).style.borderColor = 'var(--gold)'
-              ;(e.currentTarget as HTMLDivElement).style.boxShadow = '0 0 0 2px rgba(184,146,74,0.12)'
+              (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--gold)'
+              ;(e.currentTarget as HTMLDivElement).style.boxShadow =
+                '0 0 0 2px rgba(184,146,74,0.12)'
             }}
             onMouseLeave={e => {
-              ;(e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(180,155,110,0.18)'
+              (e.currentTarget as HTMLDivElement).style.borderColor =
+                'rgba(180,155,110,0.18)'
               ;(e.currentTarget as HTMLDivElement).style.boxShadow = 'none'
             }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
-              textTransform: 'uppercase', fontWeight: 500, marginBottom: 8 }}>
-              Current Investments
-            </div>
 
-            <div style={{ fontFamily: 'Playfair Display,serif',
-              fontSize: 22, color: 'var(--text)', marginBottom: 6 }}>
-              {portfolioTotal > 0
-                ? formatPortfolioAmt(portfolioTotal)
-                : `₹${data.investments}`}
-            </div>
+            <div>
+              <div style={{ fontSize:10, color:'var(--muted)',
+                letterSpacing:'.45px', textTransform:'uppercase',
+                fontWeight:500, marginBottom:8 }}>Net Worth</div>
 
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.5 }}>
-              {investments.length > 0
-                ? `${investments.length} entries tracked`
-                : 'No entries yet — click to add'}
-            </div>
-
-            {portfolioByType.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
-                {[...portfolioByType]
-                  .sort((a, b) => b[1] - a[1])
-                  .slice(0, 4)
-                  .map(([type, amt]) => (
-                    <div key={type}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between',
-                        fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>
-                        <span>{TYPE_LABELS[type] ?? type}</span>
-                        <span style={{ color: 'var(--text)', fontWeight: 500 }}>
-                          {Math.round(amt / portfolioTotal * 100)}%
-                        </span>
-                      </div>
-                      <div style={{ height: 4, background: 'var(--surface2)',
-                        borderRadius: 4, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', borderRadius: 4,
-                          background: TYPE_COLORS[type] ?? 'var(--gold)',
-                          width: `${Math.round(amt / portfolioTotal * 100)}%` }}/>
-                      </div>
-                    </div>
-                  ))}
+              <div style={{ fontFamily:'Playfair Display,serif',
+                fontSize:26, marginBottom:6,
+                color: netWorth >= 0 ? 'var(--text)' : 'var(--red)' }}>
+                {formatPortfolioAmt(Math.abs(netWorth))}
+                {netWorth < 0 && (
+                  <span style={{ fontSize:12, color:'var(--red)',
+                    marginLeft:4 }}>debt</span>
+                )}
               </div>
-            )}
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 600 }}>
-                {investments.length > 0 ? 'Manage Portfolio →' : 'Start Tracking →'}
-              </span>
+              <div style={{ display:'flex', alignItems:'center',
+                gap:6, marginBottom:6 }}>
+                <div style={{ width:8, height:8, borderRadius:'50%',
+                  background:'var(--green)' }}/>
+                <span style={{ fontSize:11, color:'var(--muted)' }}>Assets</span>
+                <span style={{ fontSize:11, fontWeight:600,
+                  color:'var(--text)', marginLeft:'auto' }}>
+                  {formatPortfolioAmt(portfolioTotal + totalAssets)}
+                </span>
+              </div>
+
+              <div style={{ display:'flex', alignItems:'center',
+                gap:6, marginBottom:16 }}>
+                <div style={{ width:8, height:8, borderRadius:'50%',
+                  background:'var(--red)' }}/>
+                <span style={{ fontSize:11, color:'var(--muted)' }}>Liabilities</span>
+                <span style={{ fontSize:11, fontWeight:600,
+                  color:'var(--red)', marginLeft:'auto' }}>
+                  −{formatPortfolioAmt(totalLiabilities)}
+                </span>
+              </div>
+
+              {(portfolioTotal + totalAssets) > 0 && (
+                <div style={{ height:6, background:'var(--surface2)',
+                  borderRadius:4, overflow:'hidden', marginBottom:16 }}>
+                  <div style={{ height:'100%', borderRadius:4,
+                    background:'linear-gradient(90deg,var(--green),var(--gold))',
+                    width:`${Math.min(100, Math.round(
+                      netWorth / (portfolioTotal + totalAssets) * 100
+                    ))}%` }}/>
+                </div>
+              )}
             </div>
+
+            <span style={{ fontSize:11, color:'var(--gold)', fontWeight:600 }}>
+              Manage Net Worth →
+            </span>
           </div>
 
-          {/* Portfolio Growth Chart — total invested vs time (single gold line) */}
-          <div style={{ background: 'var(--surface)', borderRadius: 18, padding: '18px 20px',
-            border: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between',
-              alignItems: 'baseline', marginBottom: 10 }}>
-              <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
-                textTransform: 'uppercase', fontWeight: 500 }}>Total Invested Amount vs Time</div>
+          {/* ── COL 2: TOTAL INVESTED AMOUNT VS TIME ── */}
+          <div style={{ background:'var(--surface)',
+            borderRadius:18, padding:'18px 20px',
+            border:'1px solid var(--border)' }}>
+
+            <div style={{ display:'flex',
+              justifyContent:'space-between',
+              alignItems:'baseline', marginBottom:10 }}>
+              <div style={{ fontSize:10, color:'var(--muted)',
+                letterSpacing:'.45px', textTransform:'uppercase',
+                fontWeight:500 }}>Total Invested Amount vs Time</div>
               {portfolioTotal > 0 ? (
-                <span style={{ fontSize: 10, color: 'var(--green)', fontWeight: 600 }}>Live</span>
+                <span style={{ fontSize:10, color:'var(--green)',
+                  fontWeight:600 }}>Live</span>
               ) : (
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>No data</span>
+                <span style={{ fontSize:10, color:'var(--muted)' }}>No data</span>
               )}
             </div>
 
             {investments.length === 0 ? (
-              <div style={{ height: 130, display: 'flex', alignItems: 'center',
-                justifyContent: 'center', color: 'var(--muted)', fontSize: 11,
-                flexDirection: 'column', gap: 8 }}>
-                <span style={{ fontSize: 24 }}>📊</span>
+              <div style={{ height:130, display:'flex',
+                alignItems:'center', justifyContent:'center',
+                color:'var(--muted)', fontSize:11,
+                flexDirection:'column', gap:8 }}>
+                <span style={{ fontSize:24 }}>📊</span>
                 <span>Add investments to see growth</span>
               </div>
             ) : (() => {
@@ -605,41 +661,44 @@ export default function DashboardPage() {
               const sortedDates = [...new Set(investments.map(i => i.date))].sort()
               const totalByDate = sortedDates.map(d => ({
                 date: d,
-                total: investments.filter(i => i.date <= d).reduce((s, i) => s + i.amount, 0),
+                total: investments
+                  .filter(i => i.date <= d)
+                  .reduce((s, i) => s + i.amount, 0)
               }))
               const maxV = Math.max(...totalByDate.map(p => p.total), 1)
 
-              function toXY(i: number, total: number): [number, number] {
+              function toXY(idx: number, total: number): [number, number] {
                 const x = totalByDate.length === 1 ? W / 2
-                  : (i / (totalByDate.length - 1)) * W
+                  : (idx / (totalByDate.length - 1)) * W
                 const y = H - (total / maxV) * (H - 10)
                 return [x, y]
               }
 
               const pts = totalByDate.map((p, i) => toXY(i, p.total))
-              const polyline = pts.map(([x, y]) => `${x},${y}`).join(' ')
+              const polyline = pts.map(([x,y]) => `${x},${y}`).join(' ')
               const area = `0,${H} ${polyline} ${W},${H}`
 
               function fmtV(v: number) {
-                if (v >= 10000000) return `₹${(v / 10000000).toFixed(1)}Cr`
-                if (v >= 100000)   return `₹${(v / 100000).toFixed(1)}L`
-                if (v >= 1000)     return `₹${(v / 1000).toFixed(0)}K`
+                if (v >= 10000000) return `₹${(v/10000000).toFixed(1)}Cr`
+                if (v >= 100000)   return `₹${(v/100000).toFixed(1)}L`
+                if (v >= 1000)     return `₹${(v/1000).toFixed(0)}K`
                 return `₹${v}`
               }
 
               return (
                 <div>
-                  <svg viewBox={`0 0 ${W} ${H + 20}`} width="100%"
-                    style={{ display: 'block', overflow: 'visible' }}>
+                  <svg viewBox={`0 0 ${W} ${H+20}`} width="100%"
+                    style={{ display:'block', overflow:'visible' }}>
                     <defs>
                       <linearGradient id="totalGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%"   stopColor="var(--gold)" stopOpacity="0.22"/>
+                        <stop offset="0%" stopColor="var(--gold)" stopOpacity="0.22"/>
                         <stop offset="100%" stopColor="var(--gold)" stopOpacity="0"/>
                       </linearGradient>
                     </defs>
-                    {[0.25, 0.5, 0.75, 1].map(f => (
-                      <line key={f} x1={0} y1={H - f * H} x2={W} y2={H - f * H}
-                        stroke="rgba(180,155,110,0.1)" strokeWidth="1" strokeDasharray="4 4"/>
+                    {[0.25,0.5,0.75,1].map(f => (
+                      <line key={f} x1={0} y1={H-f*H} x2={W} y2={H-f*H}
+                        stroke="rgba(180,155,110,0.1)" strokeWidth="1"
+                        strokeDasharray="4 4"/>
                     ))}
                     <line x1={0} y1={H} x2={W} y2={H}
                       stroke="rgba(180,155,110,0.18)" strokeWidth="1"/>
@@ -647,19 +706,20 @@ export default function DashboardPage() {
                     <polyline points={polyline} fill="none"
                       stroke="var(--gold)" strokeWidth="2.5"
                       strokeLinecap="round" strokeLinejoin="round"/>
-                    {pts.map(([x, y], i) => (
+                    {pts.map(([x,y], i) => (
                       <circle key={i} cx={x} cy={y} r="3.5" fill="var(--gold)"/>
                     ))}
                     {totalByDate
                       .filter((_, i) =>
                         i === 0 ||
                         i === totalByDate.length - 1 ||
-                        (totalByDate.length > 2 && i === Math.floor(totalByDate.length / 2)))
+                        (totalByDate.length > 2 &&
+                          i === Math.floor(totalByDate.length / 2)))
                       .map(p => {
                         const idx = totalByDate.findIndex(d => d.date === p.date)
                         const [x] = toXY(idx, 0)
                         return (
-                          <text key={p.date} x={x} y={H + 14}
+                          <text key={p.date} x={x} y={H+14}
                             fontSize="8" fill="var(--muted)"
                             textAnchor="middle" fontFamily="Inter,sans-serif">
                             {p.date.slice(5)}
@@ -667,162 +727,135 @@ export default function DashboardPage() {
                         )
                       })}
                   </svg>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
-                    <span style={{ fontSize: 9, color: 'var(--muted)' }}>₹0</span>
-                    <span style={{ fontSize: 10, color: 'var(--gold)', fontWeight: 600 }}>
-                      {fmtV(maxV)}
-                    </span>
+                  <div style={{ display:'flex',
+                    justifyContent:'space-between', marginTop:2 }}>
+                    <span style={{ fontSize:9, color:'var(--muted)' }}>₹0</span>
+                    <span style={{ fontSize:10, color:'var(--gold)',
+                      fontWeight:600 }}>{fmtV(maxV)}</span>
                   </div>
                 </div>
               )
             })()}
           </div>
 
-          {/* Right column: Net Worth card + Asset Allocation stacked */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* ── COL 3: ASSET ALLOCATION — full height, donut top + legend below ── */}
+          <div style={{ background:'var(--surface)',
+            borderRadius:18, padding:'18px 20px',
+            border:'1px solid var(--border)',
+            display:'flex', flexDirection:'column' }}>
 
-            {/* Net Worth — clickable → /networth */}
-            <div
-              onClick={() => router.push('/networth')}
-              style={{ background: 'var(--surface)', borderRadius: 18, padding: '18px 20px',
-                border: '1px solid var(--border)', cursor: 'pointer',
-                transition: 'border-color .15s, box-shadow .15s' }}
-              onMouseEnter={e => {
-                ;(e.currentTarget as HTMLDivElement).style.borderColor = 'var(--gold)'
-                ;(e.currentTarget as HTMLDivElement).style.boxShadow = '0 0 0 2px rgba(184,146,74,0.12)'
-              }}
-              onMouseLeave={e => {
-                ;(e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(180,155,110,0.18)'
-                ;(e.currentTarget as HTMLDivElement).style.boxShadow = 'none'
-              }}>
-              <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
-                textTransform: 'uppercase', fontWeight: 500, marginBottom: 8 }}>Net Worth</div>
-              <div style={{ fontFamily: 'Playfair Display,serif', fontSize: 22,
-                color: netWorth >= 0 ? 'var(--text)' : 'var(--red)', marginBottom: 6 }}>
-                {formatPortfolioAmt(Math.abs(netWorth))}
-                {netWorth < 0 && (
-                  <span style={{ fontSize: 12, color: 'var(--red)', marginLeft: 4 }}>debt</span>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
-                <div>
-                  <div style={{ fontSize: 9, color: 'var(--green)', fontWeight: 600,
-                    letterSpacing: '.3px' }}>ASSETS</div>
-                  <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500 }}>
-                    {formatPortfolioAmt(portfolioTotal + totalAssets)}
-                  </div>
-                </div>
-                <div style={{ width: 1, background: 'var(--border)' }}/>
-                <div>
-                  <div style={{ fontSize: 9, color: 'var(--red)', fontWeight: 600,
-                    letterSpacing: '.3px' }}>LIABILITIES</div>
-                  <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500 }}>
-                    {formatPortfolioAmt(totalLiabilities)}
-                  </div>
-                </div>
-              </div>
-              <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 600 }}>
-                Manage Net Worth →
-              </span>
+            <div style={{ fontSize:10, color:'var(--muted)',
+              letterSpacing:'.45px', textTransform:'uppercase',
+              fontWeight:500, marginBottom:16 }}>
+              Asset Allocation
             </div>
 
-            {/* Asset Allocation donut */}
-            <div style={{ background: 'var(--surface)', borderRadius: 18, padding: '18px 20px',
-              border: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
-                textTransform: 'uppercase', fontWeight: 500, marginBottom: 12 }}>
-                Asset Allocation
-              </div>
-
-              {portfolioByType.length === 0 ? (() => {
+            {portfolioByType.length === 0 ? (
+              (() => {
+                const allocation = getAllocation(currentLevel)
                 const circumference = 2 * Math.PI * 52
                 let offset = 0
                 return (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={{ position: 'relative', width: 80, height: 80, flexShrink: 0 }}>
-                      <svg viewBox="0 0 130 130" width="80" height="80">
-                        <circle cx="65" cy="65" r="52" fill="none"
-                          stroke="var(--surface2)" strokeWidth="20"/>
+                  <div style={{ display:'flex', flexDirection:'column',
+                    alignItems:'center', flex:1 }}>
+                    <div style={{ position:'relative',
+                      width:130, height:130, marginBottom:20 }}>
+                      <svg viewBox="0 0 130 130" width="130" height="130">
+                        <circle cx="65" cy="65" r="52"
+                          fill="none" stroke="var(--surface2)" strokeWidth="22"/>
                         {allocation.map((a, i) => {
                           const dash = (a.pct / 100) * circumference
-                          const startOffset = offset; offset += dash
+                          const startOffset = offset
+                          offset += dash
                           const rotate = -90 + (startOffset / circumference) * 360
                           return (
-                            <circle key={i} cx="65" cy="65" r="52" fill="none"
-                              stroke={a.color} strokeWidth="20"
+                            <circle key={i} cx="65" cy="65" r="52"
+                              fill="none" stroke={a.color} strokeWidth="22"
                               strokeDasharray={`${dash} ${circumference - dash}`}
                               transform={`rotate(${rotate} 65 65)`}/>
                           )
                         })}
                       </svg>
-                      <div style={{ position: 'absolute', top: '50%', left: '50%',
-                        transform: 'translate(-50%,-50%)', textAlign: 'center' }}>
-                        <div style={{ fontSize: 9, color: 'var(--muted)' }}>Suggested</div>
+                      <div style={{ position:'absolute', top:'50%', left:'50%',
+                        transform:'translate(-50%,-50%)', textAlign:'center' }}>
+                        <div style={{ fontSize:10, color:'var(--muted)' }}>Suggested</div>
                       </div>
                     </div>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    <div style={{ width:'100%', display:'flex',
+                      flexDirection:'column', gap:8 }}>
                       {allocation.map((a, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center',
-                          justifyContent: 'space-between' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <div style={{ width: 6, height: 6, borderRadius: 2, background: a.color }}/>
-                            <span style={{ fontSize: 9, color: 'var(--text-sm)' }}>
-                              {a.label.split(' ')[0]}
+                        <div key={i} style={{ display:'flex', alignItems:'center',
+                          justifyContent:'space-between' }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                            <div style={{ width:10, height:10, borderRadius:3,
+                              background:a.color }}/>
+                            <span style={{ fontSize:11, color:'var(--text-sm)' }}>
+                              {a.label}
                             </span>
                           </div>
-                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text)' }}>
+                          <span style={{ fontSize:11, fontWeight:600, color:'var(--text)' }}>
                             {a.pct}%
                           </span>
                         </div>
                       ))}
-                      <div style={{ fontSize: 8, color: 'var(--muted)', marginTop: 2 }}>
-                        No portfolio data yet
+                      <div style={{ fontSize:9, color:'var(--muted)', marginTop:4 }}>
+                        Based on your level · add portfolio entries for real data
                       </div>
                     </div>
                   </div>
                 )
-              })() : (() => {
-                const grand = portfolioByType.reduce((s, [, v]) => s + v, 0) || 1
+              })()
+            ) : (
+              (() => {
+                const grand = portfolioByType.reduce((s, [,v]) => s + v, 0) || 1
                 const circumference = 2 * Math.PI * 52
                 let offset = 0
+                const sorted = [...portfolioByType].sort((a, b) => b[1] - a[1])
                 return (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={{ position: 'relative', width: 80, height: 80, flexShrink: 0 }}>
-                      <svg viewBox="0 0 130 130" width="80" height="80">
-                        <circle cx="65" cy="65" r="52" fill="none"
-                          stroke="var(--surface2)" strokeWidth="20"/>
-                        {portfolioByType.map(([type, amt], i) => {
+                  <div style={{ display:'flex', flexDirection:'column',
+                    alignItems:'center', flex:1 }}>
+                    <div style={{ position:'relative',
+                      width:130, height:130, marginBottom:20 }}>
+                      <svg viewBox="0 0 130 130" width="130" height="130">
+                        <circle cx="65" cy="65" r="52"
+                          fill="none" stroke="var(--surface2)" strokeWidth="22"/>
+                        {sorted.map(([type, amt], i) => {
                           const dash = (amt / grand) * circumference
-                          const startOffset = offset; offset += dash
+                          const startOffset = offset
+                          offset += dash
                           const rotate = -90 + (startOffset / circumference) * 360
                           return (
-                            <circle key={i} cx="65" cy="65" r="52" fill="none"
+                            <circle key={i} cx="65" cy="65" r="52"
+                              fill="none"
                               stroke={TYPE_COLORS[type] ?? 'var(--gold)'}
-                              strokeWidth="20"
+                              strokeWidth="22"
                               strokeDasharray={`${dash} ${circumference - dash}`}
                               transform={`rotate(${rotate} 65 65)`}/>
                           )
                         })}
                       </svg>
-                      <div style={{ position: 'absolute', top: '50%', left: '50%',
-                        transform: 'translate(-50%,-50%)', textAlign: 'center' }}>
-                        <div style={{ fontSize: 9, color: 'var(--muted)' }}>
-                          {portfolioByType.length} types
+                      <div style={{ position:'absolute', top:'50%', left:'50%',
+                        transform:'translate(-50%,-50%)', textAlign:'center' }}>
+                        <div style={{ fontFamily:'Playfair Display,serif',
+                          fontSize:13, color:'var(--text)', fontWeight:500 }}>
+                          {sorted.length}
                         </div>
+                        <div style={{ fontSize:9, color:'var(--muted)' }}>types</div>
                       </div>
                     </div>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
-                      {[...portfolioByType].sort((a, b) => b[1] - a[1]).map(([type, amt]) => (
-                        <div key={type} style={{ display: 'flex', alignItems: 'center',
-                          justifyContent: 'space-between' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <div style={{ width: 6, height: 6, borderRadius: 2,
+                    <div style={{ width:'100%', display:'flex',
+                      flexDirection:'column', gap:8 }}>
+                      {sorted.map(([type, amt]) => (
+                        <div key={type} style={{ display:'flex', alignItems:'center',
+                          justifyContent:'space-between' }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                            <div style={{ width:10, height:10, borderRadius:3,
                               background: TYPE_COLORS[type] ?? 'var(--gold)' }}/>
-                            <span style={{ fontSize: 9, color: 'var(--text-sm)' }}>
-                              {(TYPE_LABELS[type] ?? type).split(' ')[0]}
+                            <span style={{ fontSize:11, color:'var(--text-sm)' }}>
+                              {TYPE_LABELS[type] ?? type}
                             </span>
                           </div>
-                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text)' }}>
+                          <span style={{ fontSize:11, fontWeight:600, color:'var(--text)' }}>
                             {Math.round(amt / grand * 100)}%
                           </span>
                         </div>
@@ -830,9 +863,10 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 )
-              })()}
-            </div>
+              })()
+            )}
           </div>
+
         </div>
 
       </div>

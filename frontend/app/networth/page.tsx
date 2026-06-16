@@ -236,10 +236,19 @@ export default function NetworthPage() {
           --green: #27AE60; --red: #E74C3C;
         }
         body.dark {
-          --bg: #111008; --surface: #1C1A12; --surface2: #252318;
-          --border: rgba(184,146,74,0.15); --text: #F0E8D8;
-          --text-sm: #C8B99A; --muted: #7A6A52; --gold: #C9A75C;
-          --green: #2ECC71; --red: #E74C3C;
+          --bg:#231512;
+          --surface:#2C1A16;
+          --surface2:#3A2218;
+          --border:rgba(201,168,76,0.15);
+          --border-md:rgba(201,168,76,0.28);
+          --gold:#C9A84C;
+          --gold-lt:#F0D080;
+          --bronze:#8B6914;
+          --muted:#B89A72;
+          --text:#F5F0E8;
+          --text-sm:#D4C4A8;
+          --green:#4CAF50;
+          --red:#E57373;
         }
         body { background: var(--bg); color: var(--text); margin: 0; padding: 0;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }

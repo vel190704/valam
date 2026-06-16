@@ -30,37 +30,86 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
     }
 
+    // Get auth token from Authorization header
+    const authHeader = request.headers.get('Authorization')
+    let userId: string | null = null
+
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.replace('Bearer ', '')
+      const { data: { user }, error } = await supabase.auth.getUser(token)
+      if (!error && user) {
+        userId = user.id
+        console.log('Authenticated user:', userId)
+      }
+    }
+
+    const fields = {
+      name:                 body.name,
+      age:                  body.age,
+      income:               body.income,
+      savings_rate:         body.savingsRate,
+      investments:          body.investments,
+      experience:           body.experience,
+      goal:                 body.goal,
+      valam_score:          body.valamScore,
+      valam_level:          body.valamLevel,
+      valam_level_name:     body.valamLevelName,
+      savings_score:        body.breakdown.savingsScore,
+      investments_score:    body.breakdown.investmentsScore,
+      income_score:         body.breakdown.incomeScore,
+      experience_score:     body.breakdown.experienceScore,
+      age_score:            body.breakdown.ageScore,
+      potential_score:      (body as any).potentialScore      ?? null,
+      potential_level:      (body as any).potentialLevel      ?? null,
+      potential_level_name: (body as any).potentialLevelName  ?? null,
+    }
+
+    if (userId) {
+      // Check if profile already exists for this user
+      const { data: existing } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      if (existing) {
+        // UPDATE existing profile
+        const { data, error } = await supabase
+          .from('profiles')
+          .update({ ...fields, updated_at: new Date().toISOString() })
+          .eq('user_id', userId)
+          .select('id')
+          .single()
+
+        if (error) {
+          console.error('Update error:', JSON.stringify(error))
+          return NextResponse.json(
+            { error: 'Failed to save profile' }, { status: 500 }
+          )
+        }
+        return NextResponse.json({ profileId: data.id }, { status: 200 })
+      }
+    }
+
+    // INSERT new profile
     const { data, error } = await supabase
       .from('profiles')
-      .insert({
-        user_id:           null,
-        name:              body.name,
-        age:               body.age,
-        income:            body.income,
-        savings_rate:      body.savingsRate,
-        investments:       body.investments,
-        experience:        body.experience,
-        goal:              body.goal,
-        valam_score:       body.valamScore,
-        valam_level:       body.valamLevel,
-        valam_level_name:  body.valamLevelName,
-        savings_score:     body.breakdown.savingsScore,
-        investments_score: body.breakdown.investmentsScore,
-        income_score:      body.breakdown.incomeScore,
-        experience_score:  body.breakdown.experienceScore,
-        age_score:         body.breakdown.ageScore,
-      })
+      .insert({ user_id: userId ?? null, ...fields })
       .select('id')
       .single()
 
     if (error) {
-      console.error('Supabase insert error:', JSON.stringify(error))
-      return NextResponse.json({ error: 'Failed to save profile' }, { status: 500 })
+      console.error('Insert error:', JSON.stringify(error))
+      return NextResponse.json(
+        { error: 'Failed to save profile' }, { status: 500 }
+      )
     }
 
     return NextResponse.json({ profileId: data.id }, { status: 201 })
   } catch (err) {
     console.error('Unexpected error:', err)
-    return NextResponse.json({ error: 'Failed to save profile' }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Failed to save profile' }, { status: 500 }
+    )
   }
 }

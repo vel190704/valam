@@ -11,10 +11,10 @@ export default function HomePage() {
   const [session, setSession] = useState<Session | null>(null);
   useEffect(() => {
     const getSession = async () => {
-    const { data } = await supabase.auth.getSession();
-    setSession(data.session);
-  }
-  getSession();
+      const { data } = await supabase.auth.getSession()
+      setSession(data.session)
+    }
+    getSession()
     const keysToRemove = [
       'valam_name', 'valam_age', 'valam_income', 'valam_savings',
       'valam_investments', 'valam_knowledge', 'valam_goal', 'valam_result'
@@ -22,6 +22,24 @@ export default function HomePage() {
     keysToRemove.forEach(key => sessionStorage.removeItem(key))
     localStorage.removeItem('valam_profile_id')
   }, [])
+
+  useEffect(() => {
+    async function checkExistingProfile() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) return
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .maybeSingle()
+
+      if (profile) {
+        router.push('/dashboard')
+      }
+    }
+    void checkExistingProfile()
+  }, [router])
 
   return (
     <main
@@ -167,13 +185,7 @@ Sign Up
       </div>
 
       <button
-         onClick={() => {
-    if (session) {
-      router.push('/dashboard')
-    } else {
-      router.push('/onboarding/step1')
-    }
-  }}
+         onClick={() => router.push('/onboarding/step1')}
         style={{ padding: '18px 56px',
           background: 'linear-gradient(135deg, #f0d080 0%, #c9a84c 40%, #a07828 100%)',
           border: 'none', borderRadius: '50px', cursor: 'pointer',

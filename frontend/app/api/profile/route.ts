@@ -28,13 +28,24 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     )
 
     const { data, error } = await supabase
-      .from('profiles').select('*').eq('id', id).single()
+      .from('profiles').select('*').eq('user_id', id).single()
 
     if (error) {
       if (error.code === 'PGRST116')
         return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
       return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 })
     }
+
+    const { data: investments } = await supabase
+      .from('investments')
+      .select('id, date, type, amount')
+      .eq('user_id', id)
+      .order('date', { ascending: true })
+
+    const { data: networthItems } = await supabase
+      .from('networth_items')
+      .select('id, category, label, amount')
+      .eq('user_id', id)
 
     const row = data as ProfileRow
     return NextResponse.json({
@@ -53,7 +64,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         },
         createdAt: row.created_at,
         recommendation: getRecommendation(row.valam_level, row.goal as GoalKey),
-      }
+      },
+      investments:    investments    ?? [],
+      networthItems:  networthItems  ?? [],
     }, { status: 200 })
   } catch (err) {
     console.error('Unexpected error:', err)

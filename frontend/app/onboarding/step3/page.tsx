@@ -4,18 +4,24 @@ import { useRouter } from 'next/navigation'
 
 const incomeOptions = [
   { value:'<3L',     label:'Below ₹3L / year' },
-  { value:'3L-8L',   label:'₹3L – ₹8L / year' },
-  { value:'8L-15L',  label:'₹8L – ₹15L / year' },
-  { value:'15L-30L', label:'₹15L – ₹30L / year' },
-  { value:'30L+',    label:'₹30L+ / year' },
+  { value:'3L-5L',   label:'₹3L – ₹5L / year' },
+  { value:'5L-8L',   label:'₹5L – ₹8L / year' },
+  { value:'8L-12L',  label:'₹8L – ₹12L / year' },
+  { value:'12L-20L', label:'₹12L – ₹20L / year' },
+  { value:'20L-30L', label:'₹20L – ₹30L / year' },
+  { value:'30L-50L', label:'₹30L – ₹50L / year' },
+  { value:'50L+',    label:'₹50L+ / year' },
 ]
 
 const savingsOptions = [
-  { value:'<5',    label:'Less than 5%' },
-  { value:'5-15',  label:'5% – 15%' },
-  { value:'15-25', label:'15% – 25%' },
-  { value:'25-40', label:'25% – 40%' },
-  { value:'40+',   label:'40% +' },
+  { value:'<2',    label:'Less than 2%' },
+  { value:'2-5',   label:'2% – 5%' },
+  { value:'5-10',  label:'5% – 10%' },
+  { value:'10-15', label:'10% – 15%' },
+  { value:'15-20', label:'15% – 20%' },
+  { value:'20-30', label:'20% – 30%' },
+  { value:'30-40', label:'30% – 40%' },
+  { value:'40+',   label:'40%+' },
 ]
 
 const investmentOptions = [

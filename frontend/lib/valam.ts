@@ -1,118 +1,157 @@
-export type SavingsKey     = '<5' | '5-15' | '15-25' | '25-40' | '40+'
-export type InvestmentsKey = '<10k' | '10k-1L' | '1L-5L' | '5L-25L' | '25L+'
-export type IncomeKey      = '<3L' | '3L-8L' | '8L-15L' | '15L-30L' | '30L+'
-export type ExperienceKey  = 'beginner' | 'learning' | 'intermediate' | 'advanced'
+export type IncomeKey =
+  | '<3L' | '3L-5L' | '5L-8L' | '8L-12L'
+  | '12L-20L' | '20L-30L' | '30L-50L' | '50L+'
+
+export type SavingsKey =
+  | '<2' | '2-5' | '5-10' | '10-15'
+  | '15-20' | '20-30' | '30-40' | '40+'
+
+export type InvestmentsKey =
+  | '<10k' | '10k-1L' | '1L-5L' | '5L-25L' | '25L+'
+
+export type ExperienceKey =
+  | 'beginner' | 'learning' | 'intermediate' | 'advanced'
 
 export interface VALAMInput {
-  age: number
-  income: IncomeKey
+  age:         number
+  income:      IncomeKey
   savingsRate: SavingsKey
   investments: InvestmentsKey
-  experience: ExperienceKey
+  experience:  ExperienceKey
 }
 
 export interface VALAMResult {
-  valamScore: number
-  valamLevel: number
-  valamLevelName: string
+  positionScore:      number
+  positionLevel:      number
+  positionLevelName:  string
+  potentialScore:     number
+  potentialLevel:     number
+  potentialLevelName: string
   breakdown: {
-    savingsScore: number
-    investmentsScore: number
-    incomeScore: number
-    experienceScore: number
-    ageScore: number
-    savingsWeighted: number
-    investmentsWeighted: number
-    incomeWeighted: number
-    experienceWeighted: number
-    ageWeighted: number
+    wealthVelocityScore: number
+    savingsScore:        number
+    incomeScore:         number
+    experienceScore:     number
+    ageScore:            number
+    wealthVelocity:      number
   }
 }
 
-const LEVEL_NAMES: Record<number, string> = {
-  1: 'Seed', 2: 'Explorer', 3: 'Builder', 4: 'Accelerator',
-  5: 'Achiever', 6: 'Wealth Creator', 7: 'Wealth Architect', 8: 'Legend'
+export const LEVEL_NAMES: Record<number, string> = {
+  1: 'Seed', 2: 'Explorer', 3: 'Builder',
+  4: 'Accelerator', 5: 'Achiever', 6: 'Wealth Creator',
+  7: 'Wealth Architect', 8: 'Legend',
 }
 
+export const LEVEL_NAMES_ARR = [
+  'Seed', 'Explorer', 'Builder', 'Accelerator',
+  'Achiever', 'Wealth Creator', 'Wealth Architect', 'Legend',
+]
+
 function getLevel(score: number): number {
-  if (score < 1.5) return 1
-  if (score < 2.0) return 2
-  if (score < 2.5) return 3
-  if (score < 3.0) return 4
-  if (score < 3.5) return 5
-  if (score < 4.0) return 6
-  if (score < 4.5) return 7
+  if (score < 2.0) return 1
+  if (score < 3.0) return 2
+  if (score < 4.0) return 3
+  if (score < 5.0) return 4
+  if (score < 6.0) return 5
+  if (score < 7.0) return 6
+  if (score < 7.5) return 7
   return 8
 }
 
+const INVESTMENT_MIDPOINTS: Record<InvestmentsKey, number> = {
+  '<10k':   5000,
+  '10k-1L': 55000,
+  '1L-5L':  300000,
+  '5L-25L': 1500000,
+  '25L+':   3000000,
+}
+
+function scoreWealthVelocity(v: number): number {
+  if (v < 1000)    return 1
+  if (v < 5000)    return 2
+  if (v < 15000)   return 3
+  if (v < 50000)   return 4
+  if (v < 100000)  return 5
+  if (v < 300000)  return 6
+  if (v < 1000000) return 7
+  return 8
+}
+
+function scoreSavings(k: SavingsKey): number {
+  const m: Record<SavingsKey, number> = {
+    '<2': 1, '2-5': 2, '5-10': 3, '10-15': 4,
+    '15-20': 5, '20-30': 6, '30-40': 7, '40+': 8,
+  }
+  return m[k]
+}
+
+function scoreIncome(k: IncomeKey): number {
+  const m: Record<IncomeKey, number> = {
+    '<3L': 1, '3L-5L': 2, '5L-8L': 3, '8L-12L': 4,
+    '12L-20L': 5, '20L-30L': 6, '30L-50L': 7, '50L+': 8,
+  }
+  return m[k]
+}
+
+function scoreExperience(k: ExperienceKey): number {
+  const m: Record<ExperienceKey, number> = {
+    beginner: 2, learning: 4, intermediate: 6, advanced: 8,
+  }
+  return m[k]
+}
+
+function scoreAge(age: number): number {
+  if (age <= 24) return 8
+  if (age <= 29) return 7
+  if (age <= 34) return 6
+  if (age <= 39) return 5
+  if (age <= 44) return 4
+  if (age <= 49) return 3
+  if (age <= 59) return 2
+  return 1
+}
+
 export function calculateVALAM(input: VALAMInput): VALAMResult {
-  let savingsScore: number
-  switch (input.savingsRate) {
-    case '<5':    savingsScore = 1; break
-    case '5-15':  savingsScore = 2; break
-    case '15-25': savingsScore = 3; break
-    case '25-40': savingsScore = 4; break
-    case '40+':   savingsScore = 5; break
-    default: throw new Error('Invalid savingsRate key: ' + input.savingsRate)
-  }
+  const investmentAmt       = INVESTMENT_MIDPOINTS[input.investments]
+  const wealthVelocity      = investmentAmt / input.age
+  const wealthVelocityScore = scoreWealthVelocity(wealthVelocity)
+  const savingsScore        = scoreSavings(input.savingsRate)
+  const incomeScore         = scoreIncome(input.income)
+  const experienceScore     = scoreExperience(input.experience)
+  const ageScore            = scoreAge(input.age)
 
-  let investmentsScore: number
-  switch (input.investments) {
-    case '<10k':   investmentsScore = 1; break
-    case '10k-1L': investmentsScore = 2; break
-    case '1L-5L':  investmentsScore = 3; break
-    case '5L-25L': investmentsScore = 4; break
-    case '25L+':   investmentsScore = 5; break
-    default: throw new Error('Invalid investments key: ' + input.investments)
-  }
+  const rawPosition =
+    0.50 * wealthVelocityScore +
+    0.25 * savingsScore +
+    0.15 * incomeScore +
+    0.10 * experienceScore
 
-  let incomeScore: number
-  switch (input.income) {
-    case '<3L':     incomeScore = 1; break
-    case '3L-8L':   incomeScore = 2; break
-    case '8L-15L':  incomeScore = 3; break
-    case '15L-30L': incomeScore = 4; break
-    case '30L+':    incomeScore = 5; break
-    default: throw new Error('Invalid income key: ' + input.income)
-  }
+  const rawPotential =
+    0.45 * savingsScore +
+    0.35 * ageScore +
+    0.10 * incomeScore +
+    0.10 * experienceScore
 
-  let experienceScore: number
-  switch (input.experience) {
-    case 'beginner':     experienceScore = 1; break
-    case 'learning':     experienceScore = 2; break
-    case 'intermediate': experienceScore = 3; break
-    case 'advanced':     experienceScore = 4; break
-    default: throw new Error('Invalid experience key: ' + input.experience)
-  }
-
-  let ageScore: number
-  const age = input.age
-  if (age >= 18 && age <= 24)      ageScore = 5
-  else if (age >= 25 && age <= 34) ageScore = 4
-  else if (age >= 35 && age <= 44) ageScore = 3
-  else if (age >= 45 && age <= 59) ageScore = 2
-  else                             ageScore = 1
-
-  const savingsWeighted     = savingsScore     * 0.40
-  const investmentsWeighted = investmentsScore * 0.25
-  const incomeWeighted      = incomeScore      * 0.15
-  const experienceWeighted  = experienceScore  * 0.10
-  const ageWeighted         = ageScore         * 0.10
-
-  const raw = savingsWeighted + investmentsWeighted + incomeWeighted +
-              experienceWeighted + ageWeighted
-  const valamScore = Math.round(raw * 100) / 100
-  const valamLevel = getLevel(valamScore)
+  const positionScore  = Math.round(rawPosition  * 100) / 100
+  const potentialScore = Math.round(rawPotential * 100) / 100
+  const positionLevel  = getLevel(positionScore)
+  const potentialLevel = getLevel(potentialScore)
 
   return {
-    valamScore,
-    valamLevel,
-    valamLevelName: LEVEL_NAMES[valamLevel],
+    positionScore,
+    positionLevel,
+    positionLevelName:  LEVEL_NAMES[positionLevel],
+    potentialScore,
+    potentialLevel,
+    potentialLevelName: LEVEL_NAMES[potentialLevel],
     breakdown: {
-      savingsScore, investmentsScore, incomeScore,
-      experienceScore, ageScore,
-      savingsWeighted, investmentsWeighted, incomeWeighted,
-      experienceWeighted, ageWeighted,
-    }
+      wealthVelocityScore,
+      savingsScore,
+      incomeScore,
+      experienceScore,
+      ageScore,
+      wealthVelocity: Math.round(wealthVelocity),
+    },
   }
 }

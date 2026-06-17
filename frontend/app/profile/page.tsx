@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 export default function ProfilePage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
+  const [joinedMonth, setJoinedMonth] = useState('')
   const [user, setUser] = useState<{
     email: string
     name: string
@@ -17,16 +18,28 @@ export default function ProfilePage() {
       const {
         data: { session },
       } = await supabase.auth.getSession()
-
       if (!session) {
         router.replace('/login')
         return
       }
+      const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .single()
+      const joined = new Date(profile.created_at)
+        .toLocaleDateString('en-US', {
+        month: 'long',
+        year: 'numeric' 
+      })
+      setJoinedMonth(joined);
       setUser({
         email: session.user.email || '',
         name: session.user.user_metadata.name || '',
-        age: session.user.user_metadata.age || 0,
+        age: profile.age || 0,
       })
+      //console.log(session)
+      //console.log(profile)
       setLoading(false)
     }
     getUser()
@@ -50,8 +63,8 @@ export default function ProfilePage() {
     <main className="min-h-screen bg-[#1a0f0a] px-6 py-10 flex flex-col items-center">
 
       {/* Logo */}
-      <div className="font-serif text-3xl sm:text-4xl font-bold tracking-[4px] text-[#c9a84c] mb-10">
-        VALAM ★
+      <div className=" font-serif text-3xl sm:text-4xl font-bold tracking-[4px] text-[#c9a84c] mb-10">
+      {/*  VALAM ★ */}
       </div>
 
       {/* Card */}
@@ -85,10 +98,10 @@ export default function ProfilePage() {
             {user?.name?.charAt(0).toUpperCase()}
           </div>
           <h1 className="mt-5 text-3xl font-serif text-[#f5f0e8]">
-            {user?.name}
+            Hey, {user?.name}
           </h1>
           <p className="text-[#f5f0e8]/60 mt-1">
-            Investor at VALAM {/*Later needs to be changed as growing valam since (date signed up in the site)*/}
+            Growing with Valam since {joinedMonth} {/*Later needs to be changed as growing valam since (date signed up in the site)*/}
           </p>
         </div>
 

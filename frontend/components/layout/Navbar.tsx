@@ -18,7 +18,6 @@ export default function Navbar() {
     '/result',
     '/onboarding',
     '/auth',
-    '/profile'
   ]
 
   const hiddenPage = appPages.some(

@@ -48,6 +48,17 @@ export const LEVEL_NAMES_ARR = [
   'Achiever', 'Wealth Creator', 'Wealth Architect', 'Legend',
 ]
 
+export const LEVEL_MESSAGES: Record<number, string> = {
+  1: "You're at the beginning of your financial journey.",
+  2: "You're developing financial awareness and healthy habits.",
+  3: "You're laying the foundations for long-term wealth.",
+  4: "Your habits and investments are beginning to compound.",
+  5: "You've built meaningful financial momentum.",
+  6: "You're actively creating substantial wealth.",
+  7: "You've built a strong financial system capable of long-term growth.",
+  8: "You've reached an elite level of wealth creation and financial discipline.",
+}
+
 function getLevel(score: number): number {
   if (score < 2.0) return 1
   if (score < 3.0) return 2

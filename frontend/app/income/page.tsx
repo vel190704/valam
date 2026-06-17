@@ -254,12 +254,14 @@ export default function IncomePage() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) { setLoading(false); return }
 
-    const { data } = await supabase
-      .from('income_entries')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .order('date', { ascending: false })
-    setEntries((data ?? []) as IncomeEntry[])
+    const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+    const res = await fetch(`${BASE}/income`, {
+      headers: { 'Authorization': `Bearer ${session.access_token}` },
+    })
+    if (res.ok) {
+      const json = await res.json() as { entries: IncomeEntry[] }
+      setEntries(json.entries ?? [])
+    }
     setLoading(false)
   }, [])
 
@@ -275,26 +277,36 @@ export default function IncomePage() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { setFormErr('Not logged in'); setSaving(false); return }
 
-    const { data, error } = await supabase
-      .from('income_entries')
-      .insert({
-        user_id: session.user.id,
+    const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+    const res = await fetch(`${BASE}/income`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
         date: fDate,
         source: fSource.trim(),
         category: fCat,
         amount: amt,
-        note: fNote.trim() || null,
-      })
-      .select().single()
-
-    if (error) { setFormErr(error.message); setSaving(false); return }
-    setEntries(prev => [data as IncomeEntry, ...prev])
+        note: fNote.trim() || undefined,
+      }),
+    })
+    const json = await res.json() as { entry?: IncomeEntry; error?: string }
+    if (!res.ok) { setFormErr(json.error ?? 'Failed to save'); setSaving(false); return }
+    setEntries(prev => [json.entry!, ...prev])
     setFDate(''); setFSource(''); setFAmount(''); setFNote(''); setFCat('salary')
     setSaving(false)
   }
 
   async function handleDelete(id: string) {
-    await supabase.from('income_entries').delete().eq('id', id)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+    await fetch(`${BASE}/income/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${session.access_token}` },
+    })
     setEntries(prev => prev.filter(e => e.id !== id))
   }
 

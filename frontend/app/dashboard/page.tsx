@@ -115,7 +115,15 @@ export default function DashboardPage() {
       if (!session?.user) { setLoading(false); return }
 
       try {
-        const res = await fetch(`/api/profile?id=${encodeURIComponent(session.user.id)}`)
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'}/profile`,
+          {
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        )
         if (res.ok) {
           const json = await res.json() as {
             profile: {

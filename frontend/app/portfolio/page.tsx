@@ -303,9 +303,10 @@ export default function PortfolioPage() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) { setLoading(false); return }
 
-    const res = await fetch(
-      `/api/investments?user_id=${encodeURIComponent(session.user.id)}`
-    )
+    const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+    const res = await fetch(`${BASE}/investments`, {
+      headers: { 'Authorization': `Bearer ${session.access_token}` },
+    })
     if (res.ok) {
       const json = await res.json() as { investments: Investment[] }
       setInvestments(json.investments ?? [])
@@ -328,7 +329,8 @@ export default function PortfolioPage() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { setFormError('Not logged in'); setSaving(false); return }
 
-    const res = await fetch('/api/investments', {
+    const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+    const res = await fetch(`${BASE}/investments`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -353,7 +355,8 @@ export default function PortfolioPage() {
   async function handleDelete(id: string) {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    await fetch(`/api/investments?id=${id}`, {
+    const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+    await fetch(`${BASE}/investments/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${session.access_token}` },
     })

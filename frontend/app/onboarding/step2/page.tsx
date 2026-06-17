@@ -24,11 +24,11 @@ export default function Step2() {
   }
 
   return (
-    <main style={{ minHeight:'100vh', background:'#1a0f0a',
-      display:'flex', alignItems:'center', justifyContent:'center', padding:'24px' }}>
-      <div style={{ background:'rgba(245,240,232,0.95)', borderRadius:'20px',
-        padding:'48px 40px', maxWidth:'520px', width:'100%',
-        border:'1px solid rgba(201,168,76,0.3)' }}>
+    <main className="flex min-h-screen items-center justify-center px-4 py-28 sm:px-6 lg:px-8"
+      style={{ background:'#1a0f0a' }}>
+      <div className="w-full max-w-[520px] px-5 py-8 sm:px-10 sm:py-12"
+        style={{ background:'rgba(245,240,232,0.95)', borderRadius:'20px',
+          border:'1px solid rgba(201,168,76,0.3)' }}>
 
         <div style={{ display:'flex', justifyContent:'center', gap:'8px', marginBottom:'48px' }}>
           {[1,2,3,4].map(i => (

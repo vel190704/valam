@@ -17,109 +17,130 @@ export default function ResultPage() {
   const router = useRouter()
   const hasSaved = useRef(false)
   const [result, setResult] = useState<VALAMResult | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [requiresSignup, setRequiresSignup] = useState(false)
 
   useEffect(() => {
     if (hasSaved.current) return
     hasSaved.current = true
 
-    const name        = sessionStorage.getItem('valam_name')
-    const ageStr      = sessionStorage.getItem('valam_age')
-    const income      = sessionStorage.getItem('valam_income')
-    const savings     = sessionStorage.getItem('valam_savings')
-    const investments = sessionStorage.getItem('valam_investments')
-    const knowledge   = sessionStorage.getItem('valam_knowledge')
-    const goal        = sessionStorage.getItem('valam_goal')
+    async function calculateAndSave() {
+      const name        = sessionStorage.getItem('valam_name') ?? ''
+      const age         = Number(sessionStorage.getItem('valam_age') ?? 0)
+      const experience  = sessionStorage.getItem('valam_experience') ?? 'beginner'
+      const income      = sessionStorage.getItem('valam_income') ?? '<3L'
+      const savingsRate = sessionStorage.getItem('valam_savings') ?? '<2'
+      const investments = sessionStorage.getItem('valam_investments') ?? '<10k'
+      const goal        = sessionStorage.getItem('valam_goal') ?? 'wealth'
 
-    if (!name || !ageStr || !income || !savings || !investments || !knowledge) {
-      router.push('/onboarding/step1')
-      return
-    }
-
-    const age = parseInt(ageStr, 10)
-    if (isNaN(age)) { router.push('/onboarding/step1'); return }
-
-    let valamResult: VALAMResult
-    try {
-      valamResult = calculateVALAM({
+      const calculated = calculateVALAM({
         age,
         income:      income as IncomeKey,
-        savingsRate: savings as SavingsKey,
+        savingsRate: savingsRate as SavingsKey,
         investments: investments as InvestmentsKey,
-        experience:  knowledge as ExperienceKey,
+        experience:  experience as ExperienceKey,
       })
-    } catch {
-      router.push('/onboarding/step1')
-      return
-    }
+      setResult(calculated)
+      setLoading(false)
 
-    setResult(valamResult)
+      const { data: { session } } = await supabase.auth.getSession()
 
-    setSaving(true)
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
-        const token = session?.access_token ?? ''
-        return fetch('/api/save-profile', {
+      if (!session?.user) {
+        setRequiresSignup(true)
+        return
+      }
+
+      try {
+        const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+        await fetch(`${BASE}/profile/save-assessment`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
+            'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
             name,
             age,
             income,
-            savingsRate:        savings,
+            savingsRate,
             investments,
-            experience:         knowledge,
-            goal:               goal ?? '',
-            valamScore:         valamResult.positionScore,
-            valamLevel:         valamResult.positionLevel,
-            valamLevelName:     valamResult.positionLevelName,
-            potentialScore:     valamResult.potentialScore,
-            potentialLevel:     valamResult.potentialLevel,
-            potentialLevelName: valamResult.potentialLevelName,
+            experience,
+            goal,
+            valamScore:         calculated.positionScore,
+            valamLevel:         calculated.positionLevel,
+            valamLevelName:     calculated.positionLevelName,
+            potentialScore:     calculated.potentialScore,
+            potentialLevel:     calculated.potentialLevel,
+            potentialLevelName: calculated.potentialLevelName,
+            wealthVelocity:     calculated.breakdown.wealthVelocity,
             breakdown: {
-              savingsScore:     valamResult.breakdown.savingsScore,
-              investmentsScore: valamResult.breakdown.wealthVelocityScore,
-              incomeScore:      valamResult.breakdown.incomeScore,
-              experienceScore:  valamResult.breakdown.experienceScore,
-              ageScore:         valamResult.breakdown.ageScore,
+              savingsScore:     calculated.breakdown.savingsScore,
+              investmentsScore: calculated.breakdown.wealthVelocityScore,
+              incomeScore:      calculated.breakdown.incomeScore,
+              experienceScore:  calculated.breakdown.experienceScore,
+              ageScore:         calculated.breakdown.ageScore,
             },
           }),
         })
-      })
-      .then(async (res) => {
-        if (!res.ok) {
-          const errText = await res.text()
-          console.error('Save failed:', res.status, errText)
-          throw new Error('Save failed')
-        }
-        const data = await res.json() as { profileId: string }
-        sessionStorage.setItem('valam_result', JSON.stringify(valamResult))
-        localStorage.setItem('valam_profile_id', data.profileId)
-      })
-      .catch(() => {
-        setSaveError('Could not save your profile. Your score is still shown below.')
-      })
-      .finally(() => setSaving(false))
-  }, [router])
+      } catch (err) {
+        console.error('Failed to save profile:', err)
+      }
+    }
 
-  if (!result) {
-    return (
-      <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', background: '#1a0f0a' }}>
-        <div style={{ textAlign: 'center', color: '#f5f0e8' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '16px' }}>⏳</div>
-          <p style={{ fontFamily: 'Inter, sans-serif' }}>Calculating your financial stage...</p>
-        </div>
-      </main>
-    )
-  }
+    void calculateAndSave()
+  }, [])
+
+  if (loading) return (
+    <main style={{
+      minHeight: '100vh',
+      background: '#1a0f0a',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 16,
+    }}>
+      <div style={{
+        fontFamily: 'Playfair Display, serif',
+        fontSize: '3rem',
+        fontWeight: 700,
+        color: '#c9a84c',
+        letterSpacing: '0.25em',
+        lineHeight: 1,
+      }}>
+        VALAM
+      </div>
+      <div style={{
+        fontFamily: 'Cormorant Garamond, Playfair Display, serif',
+        fontSize: '1.1rem',
+        color: 'rgba(245,240,232,0.6)',
+        letterSpacing: '0.08em',
+        fontStyle: 'italic',
+      }}>
+        Calculating your financial stage…
+      </div>
+      <div style={{
+        marginTop: 8,
+        width: 40,
+        height: 40,
+        border: '3px solid rgba(201,168,76,0.2)',
+        borderTop: '3px solid #c9a84c',
+        borderRadius: '50%',
+        animation: 'spin 1s linear infinite',
+      }}/>
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+      `}</style>
+    </main>
+  )
+
+  if (!result) return null
 
   return (
-    <main style={{ minHeight: '100vh', background: '#1a0f0a', padding: '60px 24px 60px' }}>
+    <main style={{ minHeight: '100vh', background: '#1a0f0a', padding: '112px 24px 60px' }}>
       <div style={{ maxWidth: '800px', margin: '0 auto' }}>
 
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
@@ -134,13 +155,62 @@ export default function ResultPage() {
           </p>
         </div>
 
-        {saveError && (
-          <div style={{ background: 'rgba(255,80,80,0.1)',
-            border: '1px solid rgba(255,80,80,0.3)', borderRadius: '12px',
-            padding: '12px 20px', marginBottom: '24px',
-            fontFamily: 'Inter, sans-serif', color: '#ff9999',
-            fontSize: '0.9rem', textAlign: 'center' }}>
-            ⚠️ {saveError}
+        {/* ── Guest signup banner ── */}
+        {requiresSignup && (
+          <div style={{
+            maxWidth: 600,
+            margin: '0 auto 24px',
+            background: 'rgba(201,168,76,0.08)',
+            border: '1px solid rgba(201,168,76,0.3)',
+            borderRadius: 16,
+            padding: '18px 22px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+          }}>
+            <div style={{
+              fontFamily: 'Playfair Display, serif',
+              fontSize: 16,
+              color: '#c9a84c',
+              fontWeight: 600,
+            }}>
+              Save your assessment
+            </div>
+            <div style={{
+              fontSize: 13,
+              color: 'rgba(245,240,232,0.7)',
+              lineHeight: 1.6,
+            }}>
+              Create a free account to save your VALAM score,
+              track your progress, and access your personalised dashboard.
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <a href="/signup" style={{
+                background: 'linear-gradient(135deg, #c9a84c, #8b6914)',
+                color: '#fff',
+                borderRadius: 10,
+                padding: '9px 20px',
+                fontSize: 13,
+                fontWeight: 600,
+                textDecoration: 'none',
+                fontFamily: 'Inter, sans-serif',
+              }}>
+                Sign Up Free →
+              </a>
+              <a href="/login" style={{
+                background: 'none',
+                border: '1px solid rgba(201,168,76,0.4)',
+                color: 'rgba(245,240,232,0.8)',
+                borderRadius: 10,
+                padding: '9px 20px',
+                fontSize: 13,
+                fontWeight: 500,
+                textDecoration: 'none',
+                fontFamily: 'Inter, sans-serif',
+              }}>
+                Log In
+              </a>
+            </div>
           </div>
         )}
 
@@ -308,22 +378,17 @@ export default function ResultPage() {
           </div>
         </div>
 
-        {saving && (
-          <div style={{ textAlign: 'center', fontFamily: 'Inter, sans-serif',
-            color: 'rgba(245,240,232,0.4)', fontSize: '0.85rem',
-            marginBottom: '16px' }}>
-            Saving your profile...
-          </div>
-        )}
-
         <button
-          onClick={() => router.push('/dashboard')}
+          onClick={() => requiresSignup
+            ? router.push('/signup')
+            : router.push('/dashboard')
+          }
           style={{ width: '100%', padding: '16px',
             background: 'linear-gradient(135deg,#f0d080,#c9a84c,#a07828)',
             border: 'none', borderRadius: '50px', cursor: 'pointer',
             fontFamily: 'Inter, sans-serif', fontWeight: 700,
             fontSize: '1.1rem', color: '#2a1a0e' }}>
-          Go to Dashboard →
+          {requiresSignup ? 'Sign Up to Save →' : 'Go to Dashboard →'}
         </button>
       </div>
     </main>

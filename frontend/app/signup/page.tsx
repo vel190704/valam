@@ -1,27 +1,158 @@
-'use client';
+'use client'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
+import type { VALAMResult } from '@/lib/valam'
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+// ── Read pending assessment from sessionStorage ───────────────────────────────
+// If the user completed onboarding as a guest, bundle their full assessment
+// into the signup call so it's saved immediately on account creation.
+interface AssessmentPayload {
+  name: string
+  age: number
+  income: string
+  savingsRate: string
+  investments: string
+  experience: string
+  goal: string
+  valamScore: number
+  valamLevel: number
+  valamLevelName: string
+  potentialScore: number
+  potentialLevel: number
+  potentialLevelName: string
+  wealthVelocity: number
+  breakdown: {
+    savingsScore: number
+    investmentsScore: number
+    incomeScore: number
+    experienceScore: number
+    ageScore: number
+  }
+}
 
+function getPendingAssessment(
+  nameOverride: string,
+  ageOverride: number
+): AssessmentPayload | undefined {
+  try {
+    const rawResult = sessionStorage.getItem('valam_result')
+    if (!rawResult) return undefined
+
+    const parsed = JSON.parse(rawResult) as VALAMResult
+
+    const income      = sessionStorage.getItem('valam_income') ?? ''
+    const savingsRate = sessionStorage.getItem('valam_savings') ?? ''
+    const investments = sessionStorage.getItem('valam_investments') ?? ''
+    const experience  = sessionStorage.getItem('valam_experience') ?? 'beginner'
+    const goal        = sessionStorage.getItem('valam_goal') ?? 'wealth'
+
+    if (!income || !savingsRate || !investments) return undefined
+
+    return {
+      name:               nameOverride,
+      age:                ageOverride,
+      income,
+      savingsRate,
+      investments,
+      experience,
+      goal,
+      valamScore:         parsed.positionScore,
+      valamLevel:         parsed.positionLevel,
+      valamLevelName:     parsed.positionLevelName,
+      potentialScore:     parsed.potentialScore,
+      potentialLevel:     parsed.potentialLevel,
+      potentialLevelName: parsed.potentialLevelName,
+      wealthVelocity:     parsed.breakdown?.wealthVelocity ?? 0,
+      breakdown: {
+        savingsScore:     parsed.breakdown?.savingsScore        ?? 0,
+        investmentsScore: parsed.breakdown?.wealthVelocityScore ?? 0,
+        incomeScore:      parsed.breakdown?.incomeScore         ?? 0,
+        experienceScore:  parsed.breakdown?.experienceScore     ?? 0,
+        ageScore:         parsed.breakdown?.ageScore            ?? 0,
+      },
+    }
+  } catch {
+    return undefined
+  }
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 export default function SignupPage() {
+  const router = useRouter()
 
-  const router = useRouter();
+  const [name,                 setName]                 = useState('')
+  const [age,                  setAge]                  = useState('')
+  const [email,                setEmail]                = useState('')
+  const [password,             setPassword]             = useState('')
+  const [loading,              setLoading]              = useState(false)
+  const [error,                setError]                = useState('')
+  const [hasPendingAssessment, setHasPendingAssessment] = useState(false)
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name,setName] = useState("");
-  const [age, setAge] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  // Pre-fill from sessionStorage — runs only on the client (no SSR crash)
+  useEffect(() => {
+    setName(sessionStorage.getItem('valam_name') ?? '')
+    setAge(sessionStorage.getItem('valam_age') ?? '')
+    setHasPendingAssessment(!!sessionStorage.getItem('valam_result'))
+  }, [])
 
-  const inputStyle =
-    "w-full px-4 py-3 rounded-xl bg-transparent border border-[#c9a84c]/40 text-[#f5f0e8] placeholder:text-[#f5f0e8]/40 focus:outline-none focus:ring-2 focus:ring-[#c9a84c] transition";
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  // ── Email/password signup ──────────────────────────────────────────────────
+  async function handleSignup() {
+    setError('')
+    if (!name.trim())     { setError('Please enter your name');     return }
+    if (!age)             { setError('Please enter your age');      return }
+    if (!email.trim())    { setError('Please enter your email');    return }
+    if (!password)        { setError('Please enter a password');    return }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters'); return
+    }
 
-  async function handleGoogleLogin() {
-    const { error } = await supabase.auth.signInWithOAuth({
+    setLoading(true)
+
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: { name: name.trim(), age: Number(age) },
+      },
+    })
+
+    if (signUpError || !data.user) {
+      setError(signUpError?.message ?? 'Signup failed. Please try again.')
+      setLoading(false)
+      return
+    }
+
+    // Bundle pending assessment into the account immediately
+    const assessment = getPendingAssessment(name.trim(), Number(age))
+    if (assessment && data.session?.access_token) {
+      try {
+        const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+        await fetch(`${BASE}/profile/save-assessment`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${data.session.access_token}`,
+          },
+          body: JSON.stringify(assessment),
+        })
+      } catch {
+        console.warn('Assessment save failed after signup')
+      }
+    }
+
+    alert(
+      'Your account was created successfully. ' +
+      'Please verify your email from your inbox, then log in.'
+    )
+    router.push('/login')
+    setLoading(false)
+  }
+
+  // ── Google OAuth signup ─────────────────────────────────────────────────────
+  async function handleGoogle() {
+    setError('')
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
@@ -31,173 +162,225 @@ export default function SignupPage() {
         },
       },
     })
-    if (error) console.error('Google signup error:', error.message)
+    if (oauthError) setError(oauthError.message)
   }
 
-  const handleSignup = async () => {
-
-    setError("");
-    if(name.trim().length < 2){
-      setError("Name should contain atleast 2 characters");
-      return;
-    }
-    const ageNum = Number(age);
-    if(isNaN(ageNum) || ageNum < 18 || ageNum > 100){
-      setError("Age should be between 18 and 100");
-      return;
-    }
-    if(!emailRegex.test(email)){
-      setError("Enter a valid email");
-      return;
-    }
-    if(password.length < 8){
-      setError("Password should contain atleast 8 characters");
-      return;
-    }
-    if(password !== confirmPassword){
-      setError("Passwords do not match");
-      return;
-    }
-    try{
-      setLoading(true);
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options:{
-          data:{
-            name,
-            age
-          }
-        }
-      });
-      if(error){
-        setError(error.message);
-        return;
-      }
-      console.log(data);
-      alert("If this email is not yet registered with us, you will recieve an verification email.");
-      router.push('/login');
-    }
-    catch(err){
-      setError("Something went wrong");
-    }
-    finally{
-      setLoading(false);
-    }
+  // ── Styles ──────────────────────────────────────────────────────────────────
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    background: 'rgba(245,240,232,0.06)',
+    border: '1px solid rgba(201,168,76,0.25)',
+    borderRadius: 10,
+    padding: '12px 14px',
+    fontSize: 14,
+    color: '#F5F0E8',
+    fontFamily: 'Inter, sans-serif',
+    outline: 'none',
+    marginBottom: 12,
   }
 
+  const labelStyle: React.CSSProperties = {
+    fontSize: 11,
+    color: 'rgba(245,240,232,0.5)',
+    fontWeight: 600,
+    letterSpacing: '0.04em',
+    textTransform: 'uppercase',
+    display: 'block',
+    marginBottom: 4,
+    fontFamily: 'Inter, sans-serif',
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <main className="min-h-screen bg-[#1a0f0a] flex flex-col items-center justify-center px-6 py-10">
-      <div className="font-serif text-3xl sm:text-4xl font-bold tracking-[4px] text-[#c9a84c] mb-8">
-        VALAM ★
-      </div>
-      <h1 className="font-serif text-[#f5f0e8] font-bold text-4xl sm:text-5xl lg:text-6xl text-center leading-tight mb-4">
-        Create your account ✨
-      </h1>
-      <p className="font-serif text-[#f5f0e8]/70 text-sm sm:text-base lg:text-lg text-center max-w-md leading-relaxed mb-3">
-        Save your progress and continue your journey towards{" "}
-        <span className="whitespace-nowrap">
-          Financial Freedom.
-        </span>
-      </p>
-      {/* Small Note */}
-      <p className="text-[#c9a84c]/80 text-xs sm:text-sm text-center mb-10">
-        ✨ Your onboarding progress will be saved after signup.
-      </p>
-      {/* Form */}
-      <div className="w-full max-w-md flex flex-col gap-5">
-        <input
-          type="text"
-          placeholder="Enter your name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className={inputStyle}
-          required
-        />
-        <input
-          type="number"
-          placeholder="Enter your Age"
-          value={age}
-          onChange={(e) => setAge(e.target.value)}
-          className={inputStyle}
-          required
-        />
+    <main className="flex min-h-screen items-center justify-center px-4 py-28 sm:px-6 lg:px-8"
+      style={{ background: '#1a0f0a' }}>
+
+      <div className="w-full max-w-[480px] px-5 py-8 sm:px-10 sm:py-12"
+        style={{
+          background: 'rgba(245,240,232,0.03)',
+          border: '1px solid rgba(201,168,76,0.15)',
+          borderRadius: 20,
+          boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
+        }}>
+
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <div style={{
+            fontFamily: 'Playfair Display, serif',
+            fontSize: '1.75rem',
+            fontWeight: 700,
+            color: '#c9a84c',
+            letterSpacing: '0.1em',
+            marginBottom: 6,
+          }}>
+            VALAM
+          </div>
+          <div style={{
+            fontSize: 13,
+            color: 'rgba(245,240,232,0.55)',
+            fontFamily: 'Inter, sans-serif',
+          }}>
+            Create your account
+          </div>
+          {/* Pre-fill notice if coming from onboarding */}
+          {hasPendingAssessment && (
+            <div style={{
+              marginTop: 10,
+              padding: '8px 12px',
+              background: 'rgba(201,168,76,0.08)',
+              border: '1px solid rgba(201,168,76,0.2)',
+              borderRadius: 8,
+              fontSize: 12,
+              color: '#c9a84c',
+              fontFamily: 'Inter, sans-serif',
+            }}>
+              ✓ Your assessment will be saved automatically on signup
+            </div>
+          )}
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div style={{
+            background: 'rgba(192,57,43,0.12)',
+            border: '1px solid rgba(192,57,43,0.3)',
+            borderRadius: 10,
+            padding: '10px 14px',
+            fontSize: 13,
+            color: '#E57373',
+            marginBottom: 16,
+            fontFamily: 'Inter, sans-serif',
+          }}>
+            {error}
+          </div>
+        )}
+
+        {/* Form */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 0 }}>
+          <div>
+            <label style={labelStyle}>Full Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Your name"
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Age</label>
+            <input
+              type="number"
+              value={age}
+              onChange={e => setAge(e.target.value)}
+              placeholder="e.g. 25"
+              min={18}
+              max={80}
+              style={inputStyle}
+            />
+          </div>
+        </div>
+
+        <label style={labelStyle}>Email</label>
         <input
           type="email"
-          placeholder="Enter your email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className={inputStyle}
-          required
+          onChange={e => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          style={inputStyle}
         />
+
+        <label style={labelStyle}>Password</label>
         <input
           type="password"
-          placeholder="Create a password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className={inputStyle}
-          required
+          onChange={e => setPassword(e.target.value)}
+          placeholder="Min 6 characters"
+          style={{ ...inputStyle, marginBottom: 20 }}
         />
-        <input
-          type="password"
-          placeholder="Confirm your password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          className={inputStyle}
-          required
-        />
-        {error && (
-          <p className="text-red-400 text-sm text-center">
-            {error}
-          </p>
-        )}
+
+        {/* Signup button */}
         <button
           onClick={handleSignup}
           disabled={loading}
-          className="
-          w-full py-3 rounded-full font-bold text-[#2a1a0e]
-          bg-gradient-to-r from-[#f0d080] via-[#c9a84c] to-[#a07828]
-          shadow-lg shadow-[#c9a84c]/20
-          transition hover:scale-[1.02] active:scale-[0.98]"
-        >
-          {loading ? "Creating Account..." : "Create Account"}
+          className="disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{
+            width: '100%',
+            background: 'linear-gradient(135deg, #c9a84c, #8b6914)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 12,
+            padding: '13px',
+            fontSize: 15,
+            fontWeight: 700,
+            fontFamily: 'Inter, sans-serif',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            marginBottom: 14,
+            letterSpacing: '0.02em',
+          }}>
+          {loading ? 'Creating account…' : 'Create Account →'}
         </button>
 
         {/* Divider */}
-        <div style={{ display:'flex', alignItems:'center', gap:'12px', margin:'16px 0' }}>
-          <div style={{ flex:1, height:'1px', background:'rgba(201,168,76,0.25)' }}/>
-          <span style={{ fontFamily:'Inter, sans-serif', fontSize:'0.85rem', color:'#8b6914' }}>or</span>
-          <div style={{ flex:1, height:'1px', background:'rgba(201,168,76,0.25)' }}/>
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          gap: 10, marginBottom: 14,
+        }}>
+          <div style={{ flex: 1, height: 1, background: 'rgba(201,168,76,0.15)' }}/>
+          <span style={{ fontSize: 11, color: 'rgba(245,240,232,0.35)', fontFamily: 'Inter, sans-serif' }}>
+            or
+          </span>
+          <div style={{ flex: 1, height: 1, background: 'rgba(201,168,76,0.15)' }}/>
         </div>
 
-        {/* Google Button */}
+        {/* Google OAuth button */}
         <button
-          onClick={handleGoogleLogin}
-          style={{ width:'100%', padding:'14px',
-            background:'#fff',
-            border:'1.5px solid rgba(201,168,76,0.4)',
-            borderRadius:'50px', cursor:'pointer',
-            fontFamily:'Inter, sans-serif', fontWeight:600,
-            fontSize:'1rem', color:'#2a1a0e',
-            display:'flex', alignItems:'center',
-            justifyContent:'center', gap:'10px' }}>
-          <svg width="20" height="20" viewBox="0 0 48 48">
-            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          onClick={handleGoogle}
+          disabled={loading}
+          className="disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{
+            width: '100%',
+            background: 'rgba(245,240,232,0.05)',
+            border: '1px solid rgba(201,168,76,0.25)',
+            borderRadius: 12,
+            padding: '12px',
+            fontSize: 14,
+            fontWeight: 600,
+            color: '#F5F0E8',
+            fontFamily: 'Inter, sans-serif',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            marginBottom: 20,
+          }}>
+          <svg width="18" height="18" viewBox="0 0 18 18">
+            <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
+            <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
+            <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
+            <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
           </svg>
           Continue with Google
         </button>
 
-        <div className="text-center text-sm text-[#f5f0e8]/60 mt-2">
-          Already have an account?{" "}
-          <button
-            onClick={() => router.push('/login')}
-            className="text-[#c9a84c] font-semibold hover:underline"
-          > Login </button>
+        {/* Login link */}
+        <div style={{
+          textAlign: 'center',
+          fontSize: 13,
+          color: 'rgba(245,240,232,0.5)',
+          fontFamily: 'Inter, sans-serif',
+        }}>
+          Already have an account?{' '}
+          <a href="/login" style={{
+            color: '#c9a84c',
+            textDecoration: 'none',
+            fontWeight: 600,
+          }}>
+            Log in
+          </a>
         </div>
       </div>
     </main>
-  );
+  )
 }

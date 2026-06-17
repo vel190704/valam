@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 export default function Step1() {
   const router = useRouter()
@@ -14,6 +15,32 @@ export default function Step1() {
     localStorage.removeItem('valam_profile_id')
   }, [])
 
+  useEffect(() => {
+    async function prefill() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.user) return
+
+        const BASE = process.env.NEXT_PUBLIC_BACKEND_URL
+          ?? 'http://localhost:5000'
+        const res = await fetch(`${BASE}/profile`, {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          }
+        })
+        if (!res.ok) return
+        const json = await res.json() as { profile?: { name?: string; age?: number } }
+        const p = json.profile
+        if (p?.name) setName(p.name)
+        if (p?.age)  setAge(String(p.age))
+      } catch {
+        // silently ignore — pre-fill is best effort
+      }
+    }
+    void prefill()
+  }, [])
+
   function handleContinue() {
     if (!name.trim() || !age) return
     const ageNum = parseInt(age, 10)
@@ -24,11 +51,11 @@ export default function Step1() {
   }
 
   return (
-    <main style={{ minHeight:'100vh', background:'#1a0f0a',
-      display:'flex', alignItems:'center', justifyContent:'center', padding:'24px' }}>
-      <div style={{ background:'rgba(245,240,232,0.95)', borderRadius:'20px',
-        padding:'48px 40px', maxWidth:'480px', width:'100%',
-        border:'1px solid rgba(201,168,76,0.3)' }}>
+    <main className="flex min-h-screen items-center justify-center px-4 py-28 sm:px-6 lg:px-8"
+      style={{ background:'#1a0f0a' }}>
+      <div className="w-full max-w-[480px] px-5 py-8 sm:px-10 sm:py-12"
+        style={{ background:'rgba(245,240,232,0.95)', borderRadius:'20px',
+          border:'1px solid rgba(201,168,76,0.3)' }}>
 
         {/* Progress dots */}
         <div style={{ display:'flex', justifyContent:'center', gap:'8px', marginBottom:'48px' }}>

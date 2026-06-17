@@ -172,8 +172,11 @@ export default function NetworthPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error,      setError]      = useState('')
 
-  const load = useCallback(async (uid: string) => {
-    const res = await fetch(`/api/networth?user_id=${uid}`)
+  const load = useCallback(async (tok: string) => {
+    const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+    const res = await fetch(`${BASE}/networth`, {
+      headers: { 'Authorization': `Bearer ${tok}` },
+    })
     if (res.ok) {
       const json = await res.json() as { items: NetworthItem[] }
       setItems(json.items ?? [])
@@ -186,7 +189,7 @@ export default function NetworthPage() {
       if (!session) { router.push('/login'); return }
       setUserId(session.user.id)
       setToken(session.access_token)
-      load(session.user.id)
+      load(session.access_token)
     })
   }, [router, load])
 
@@ -203,7 +206,8 @@ export default function NetworthPage() {
     const amount = parseFloat(formAmt)
     if (isNaN(amount) || amount <= 0) { setError('Enter a valid amount'); return }
     setSubmitting(true); setError('')
-    const res = await fetch('/api/networth', {
+    const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+    const res = await fetch(`${BASE}/networth`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ category: formCat, label: formLabel.trim(), amount, note: formNote.trim() || undefined }),
@@ -216,7 +220,8 @@ export default function NetworthPage() {
   }
 
   async function deleteItem(id: string) {
-    await fetch(`/api/networth?id=${id}`, {
+    const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+    await fetch(`${BASE}/networth/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     })

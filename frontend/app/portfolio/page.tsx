@@ -830,16 +830,6 @@ export default function PortfolioPage() {
           <CombinedChart investments={investments}/>
         </div>
 
-        {/* ASSET ALLOCATION DONUT */}
-        <div style={{ background: 'var(--surface)', borderRadius: 18, padding: '20px 22px',
-          border: '1px solid var(--border)', marginBottom: 16 }}>
-          <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
-            textTransform: 'uppercase', fontWeight: 500, marginBottom: 14 }}>
-            Asset Allocation
-          </div>
-          <DonutChart investments={investments}/>
-        </div>
-
         {/* INDIVIDUAL TYPE CARDS */}
         {byType.length > 0 && (
           <div style={{ marginBottom: 16 }}>
@@ -920,46 +910,6 @@ export default function PortfolioPage() {
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* ALL ENTRIES TABLE */}
-        {investments.length > 0 && (
-          <div style={{ background: 'var(--surface)', borderRadius: 18, padding: '20px 22px',
-            border: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
-              textTransform: 'uppercase', fontWeight: 500, marginBottom: 14 }}>All Entries</div>
-            {[...investments]
-              .sort((a, b) => b.date.localeCompare(a.date))
-              .map((inv, i) => (
-              <div key={inv.id} style={{ display: 'flex', alignItems: 'center',
-                justifyContent: 'space-between', padding: '10px 0',
-                borderTop: i === 0 ? 'none' : '1px solid rgba(180,155,110,0.1)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: '50%',
-                    background: TYPE_META[inv.type].color, flexShrink: 0 }}/>
-                  <div>
-                    <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>
-                      {TYPE_META[inv.type].emoji} {TYPE_META[inv.type].label}
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
-                      {fmtDate(inv.date)}{inv.note && ` · ${inv.note}`}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ fontFamily: 'Playfair Display,serif',
-                    fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
-                    {fmtAmt(inv.amount)}
-                  </div>
-                  <button onClick={() => void handleDelete(inv.id)}
-                    style={{ background: 'none',
-                      border: '1px solid rgba(192,57,43,0.25)',
-                      borderRadius: 8, padding: '3px 10px',
-                      fontSize: 10, color: 'var(--red)', cursor: 'pointer' }}>×</button>
-                </div>
-              </div>
-            ))}
           </div>
         )}
 

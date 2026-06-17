@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LEVEL_NAMES_ARR } from '@/lib/valam'
+import Link from 'next/link'
 
 interface DashboardData {
   name:               string
@@ -252,11 +253,13 @@ export default function DashboardPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
           <div style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--gold)',
             display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>V</span>
+              <Link href={'/'}>
+            <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>V</span> </Link>
           </div>
           <span style={{ fontFamily: 'Playfair Display,serif', fontWeight: 600,
-            fontSize: 16, color: 'var(--text)' }}>VALAM</span>
+            fontSize: 16, color: 'var(--text)' }}><Link href='/'>VALAM</Link></span>
         </div>
+     
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11,

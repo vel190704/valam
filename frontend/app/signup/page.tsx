@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import type { VALAMResult } from '@/lib/valam'
 
 // ── Read pending assessment from sessionStorage ───────────────────────────────
-// If the user completed onboarding as a guest, bundle their full assessment
+// If the user completed onboarding as a guest, bundle their full assessment  
 // into the signup call so it's saved immediately on account creation.
 interface AssessmentPayload {
   name: string
@@ -30,7 +30,7 @@ interface AssessmentPayload {
     ageScore: number
   }
 }
-
+const {data:{session}} = await supabase.auth.getSession();
 function getPendingAssessment(
   nameOverride: string,
   ageOverride: number
@@ -80,7 +80,7 @@ function getPendingAssessment(
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function SignupPage() {
   const router = useRouter()
-
+  
   const [name,                 setName]                 = useState('')
   const [age,                  setAge]                  = useState('')
   const [email,                setEmail]                = useState('')
@@ -91,6 +91,10 @@ export default function SignupPage() {
 
   // Pre-fill from sessionStorage — runs only on the client (no SSR crash)
   useEffect(() => {
+    
+    if(session?.user){
+      router.push('/')
+    }
     setName(sessionStorage.getItem('valam_name') ?? '')
     setAge(sessionStorage.getItem('valam_age') ?? '')
     setHasPendingAssessment(!!sessionStorage.getItem('valam_result'))

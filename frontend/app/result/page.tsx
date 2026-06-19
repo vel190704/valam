@@ -46,6 +46,36 @@ export default function ResultPage() {
       const { data: { session } } = await supabase.auth.getSession()
 
       if (!session?.user) {
+        localStorage.setItem(
+    'pendingAssessment',
+    JSON.stringify({
+      name,
+      age,
+      income,
+      savingsRate,
+      investments,
+      experience,
+      goal,
+
+      valamScore: calculated.positionScore,
+      valamLevel: calculated.positionLevel,
+      valamLevelName: calculated.positionLevelName,
+
+      potentialScore: calculated.potentialScore,
+      potentialLevel: calculated.potentialLevel,
+      potentialLevelName: calculated.potentialLevelName,
+
+      wealthVelocity: calculated.breakdown.wealthVelocity,
+
+      breakdown: {
+        savingsScore: calculated.breakdown.savingsScore,
+        investmentsScore: calculated.breakdown.wealthVelocityScore,
+        incomeScore: calculated.breakdown.incomeScore,
+        experienceScore: calculated.breakdown.experienceScore,
+        ageScore: calculated.breakdown.ageScore,
+      },
+    })
+  )
         setRequiresSignup(true)
         return
       }

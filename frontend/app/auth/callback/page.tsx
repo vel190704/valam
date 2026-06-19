@@ -23,10 +23,72 @@ export default function AuthCallbackPage() {
               .eq('user_id', data.session.user.id)
               .maybeSingle()
 
-            router.replace(profile ? '/dashboard' : '/onboarding/step1')
-            return
-          }
+            if (profile) {
+              router.replace('/dashboard')
+              return
+} else {
+  console.log('checking if user filled form')
+  const pending =
+    localStorage.getItem(
+      'pendingAssessment'
+    )
+
+  if (pending) {
+    console.log('user has filled the form so creating new profile with input data');
+    try {
+
+      const BASE =
+        process.env
+          .NEXT_PUBLIC_BACKEND_URL
+        ?? 'http://localhost:5000'
+
+      const assessment =
+        JSON.parse(pending)
+
+      const res = await fetch(
+        `${BASE}/profile/save-assessment`,
+        {
+          method: 'POST',
+
+          headers: {
+            'Content-Type':
+              'application/json',
+
+            Authorization:
+              `Bearer ${data.session.access_token}`
+          },
+
+          body:
+            JSON.stringify(
+              assessment
+            )
         }
+      )
+
+      if (res.ok) {
+        console.log('data saved so removing local cache now')
+        localStorage.removeItem(
+          'pendingAssessment'
+        )
+
+        router.replace('/')
+
+      } else {
+        router.replace(
+          '/onboarding/step1'
+        )
+      }
+    } catch (err) {
+      console.error(
+        'Migration failed',
+        err
+      )
+      router.replace(
+        '/login'
+      )
+    }
+  } }
+} }
 
         // No code in URL — check if session already exists
         // (happens when Supabase processes the hash fragment automatically)
@@ -40,7 +102,74 @@ export default function AuthCallbackPage() {
             .eq('user_id', session.user.id)
             .maybeSingle()
 
-          router.replace(profile ? '/dashboard' : '/onboarding/step1')
+         if (profile) {
+              router.replace('/dashboard')
+              return
+} else {
+  console.log('checking if user filled form')
+  const pending =
+    localStorage.getItem(
+      'pendingAssessment'
+    )
+
+  if (pending) {
+    console.log('user has filled the form so creating new profile with input data');
+    try {
+
+      const BASE =
+        process.env
+          .NEXT_PUBLIC_BACKEND_URL
+        ?? 'http://localhost:5000'
+
+      const assessment =
+        JSON.parse(pending)
+
+      const res = await fetch(
+        `${BASE}/profile/save-assessment`,
+        {
+          method: 'POST',
+
+          headers: {
+            'Content-Type':
+              'application/json',
+
+            Authorization:
+              `Bearer ${session.access_token}`
+          },
+
+          body:
+            JSON.stringify(
+              assessment
+            )
+        }
+      )
+
+      if (res.ok) {
+        console.log('data saved so removing local cache now')
+        localStorage.removeItem(
+          'pendingAssessment'
+        )
+
+        router.replace('/')
+
+      } else {
+        router.replace(
+          '/onboarding/step1'
+        )
+      }
+    } catch (err) {
+      console.error(
+        'Migration failed',
+        err
+      )
+      router.replace(
+        '/login'
+      )
+    }
+  } 
+else{
+  router.replace('/')
+}}
         } else {
           router.replace('/login?error=oauth_failed')
         }

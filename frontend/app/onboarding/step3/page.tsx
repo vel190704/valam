@@ -73,7 +73,7 @@ export default function Step3() {
 
         <h2 style={{ fontFamily:"'Playfair Display', serif", fontSize:'1.8rem',
           color:'#2a1a0e', marginBottom:'8px', textAlign:'center' }}>
-          We'll tailor your financial roadmap based on your investing knowledge
+          We&apos;ll tailor your financial roadmap based on your investing knowledge
         </h2>
         <p style={{ fontFamily:"'Cormorant Garamond', serif", color:'#5a3e28',
           textAlign:'center', marginBottom:'40px' }}>
@@ -108,7 +108,7 @@ export default function Step3() {
             cursor: ready?'pointer':'not-allowed',
             fontFamily:'Inter, sans-serif', fontWeight:700,
             fontSize:'1rem', color:'#2a1a0e', marginBottom:'16px' }}>
-          Calculate my Stage →
+          Continue
         </button>
 
         <div style={{ textAlign:'center' }}>

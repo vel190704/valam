@@ -8,10 +8,11 @@ export default function ProfilePage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [joinedMonth, setJoinedMonth] = useState('')
+  const [onboarded, setOnboarded] = useState(false)
   const [user, setUser] = useState<{
     email: string
     name: string
-    age: number
+    age: number | null
   } | null>(null)
   useEffect(() => {
     async function getUser() {
@@ -26,20 +27,35 @@ export default function ProfilePage() {
       .from('profiles')
       .select('*')
       .eq('user_id', session.user.id)
-      .single()
-      const joined = new Date(profile.created_at)
-        .toLocaleDateString('en-US', {
-        month: 'long',
-        year: 'numeric' 
-      })
-      setJoinedMonth(joined);
-      setUser({
-        email: session.user.email || '',
-        name: session.user.user_metadata.name || '',
-        age: profile.age || 0,
-      })
-      //console.log(session)
-      //console.log(profile)
+      .maybeSingle()
+      if (profile) {
+
+  setOnboarded(true)
+
+  const joined = new Date(profile.created_at)
+    .toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric'
+    })
+
+  setJoinedMonth(joined)
+
+  setUser({
+    email: session.user.email || '',
+    name: profile.name || session.user.user_metadata.name || '',
+    age: profile.age ?? null,
+  })
+
+} else {
+
+  setOnboarded(false)
+
+  setUser({
+    email: session.user.email || '',
+    name: session.user.user_metadata.name || '',
+    age: null,
+  })
+}
       setLoading(false)
     }
     getUser()
@@ -100,9 +116,44 @@ export default function ProfilePage() {
           <h1 className="mt-5 text-3xl font-serif text-[#f5f0e8]">
             Hey, {user?.name}
           </h1>
-          <p className="text-[#f5f0e8]/60 mt-1">
-            Growing with Valam since {joinedMonth} {/*Later needs to be changed as growing valam since (date signed up in the site)*/}
-          </p>
+          {onboarded ? (
+
+  <p className="text-[#f5f0e8]/60 mt-1">
+    Growing with VALAM since {joinedMonth}
+  </p>
+
+) : (
+
+  <div className="mt-3 text-center">
+
+    <p className="text-[#f5f0e8]/60">
+      Complete your registration to save all your data.
+    </p>
+
+    <button
+      onClick={() =>
+        router.push('/onboarding/step1')
+      }
+      className="
+        mt-4
+        rounded-full
+        bg-gradient-to-r
+        from-[#f0d080]
+        via-[#c9a84c]
+        to-[#a07828]
+        px-5
+        py-2
+        text-sm
+        font-semibold
+        text-[#2a1a0e]
+        transition
+        hover:scale-105
+      "
+    >
+      Complete Registration →
+    </button>
+  </div>
+)}
         </div>
 
         {/* User Details */}
@@ -131,18 +182,20 @@ export default function ProfilePage() {
               {user?.name}
             </p>
           </div>
-          <div className="
-            rounded-2xl
-            border border-[#c9a84c]/20
-            px-5 py-4
-          ">
-            <p className="text-[#f5f0e8]/50 text-sm">
-              Age
-            </p>
-            <p className="text-[#f5f0e8] text-lg mt-1">
-              {user?.age}
-            </p>
-          </div>
+          {onboarded && (
+  <div className="
+    rounded-2xl
+    border border-[#c9a84c]/20
+    px-5 py-4
+  ">
+    <p className="text-[#f5f0e8]/50 text-sm">
+      Age
+    </p>
+    <p className="text-[#f5f0e8] text-lg mt-1">
+      {user?.age}
+    </p>
+  </div>
+)}
         </div>
         {/* Logout */}
         <button

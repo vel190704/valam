@@ -100,6 +100,83 @@ export default function LoginPage() {
         if (insertError) {
           console.log(insertError);
         }
+        if (!profile) {
+
+  const pending =
+    localStorage.getItem(
+      "pendingAssessment"
+    );
+
+  if (pending) {
+
+    try {
+
+      const assessment =
+        JSON.parse(pending);
+
+      const BASE =
+        process.env
+          .NEXT_PUBLIC_BACKEND_URL
+        ?? "http://localhost:5000";
+
+      const res = await fetch(
+        `${BASE}/profile/save-assessment`,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Authorization:
+              `Bearer ${data.session.access_token}`
+          },
+
+          body:
+            JSON.stringify(
+              assessment
+            ),
+        }
+      );
+
+      if (res.ok) {
+
+        localStorage.removeItem(
+          "pendingAssessment"
+        );
+
+      }
+
+    } catch (err) {
+
+      console.error(
+        "Failed to save guest assessment",
+        err
+      );
+
+    }
+
+  } else {
+
+    const { error: insertError } =
+      await supabase
+        .from("profiles")
+        .insert({
+          id: user.id,
+          name:
+            user.user_metadata.name,
+
+          age:
+            user.user_metadata.age,
+        });
+
+    if (insertError) {
+      console.log(insertError);
+    }
+
+  }
+
+}
       }
       router.push("/");
     } catch {

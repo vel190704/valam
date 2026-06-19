@@ -52,7 +52,7 @@ export default function LoginPage() {
     if (!emailRegex.test(email))
       return setError("Enter a valid email");
 
-    if (password.length < 8)
+    if (password.length < 6)
       return setError("Password should contain atleast 8 characters");
 
     try {

@@ -1,7 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-
+import { supabase} from '@/lib/supabase'
+import { useEffect } from 'react'
 const experiences = [
   { value:'beginner',     label:'Beginner',     desc:'No investments yet',
     icon:'🌱', detail:'Just starting out, keeping money in savings' },
@@ -16,7 +17,26 @@ const experiences = [
 export default function Step2() {
   const router = useRouter()
   const [selected, setSelected] = useState('')
-
+  
+  useEffect(() => {
+      async function prefill() {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (!session?.user) return
+  
+          const { data: profile } = await supabase
+          .from('profiles')
+          .select('onboarded')
+          .eq('user_id', session.user.id)
+          .maybeSingle()
+  
+  
+          if (profile?.onboarded) {
+          router.replace('/dashboard')
+          return
+        }
+      }
+      prefill()
+      }, [])
   function handleContinue() {
     if (!selected) return
     sessionStorage.setItem('valam_knowledge', selected)

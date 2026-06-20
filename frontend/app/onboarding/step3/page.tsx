@@ -1,7 +1,9 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-
+import { useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
+import { PostgrestFilterBuilder } from '@supabase/supabase-js'
 const incomeOptions = [
   { value:'<3L',     label:'Below ₹3L / year' },
   { value:'3L-5L',   label:'₹3L – ₹5L / year' },
@@ -45,6 +47,21 @@ export default function Step3() {
   const [income, setIncome]           = useState('')
   const [savings, setSavings]         = useState('')
   const [investments, setInvestments] = useState('')
+
+  useEffect(() =>{
+    async function precheck(){
+      const{data:{session}} = await supabase.auth.getSession()
+      if(!session?.user){
+        return
+      }
+      const{data:profile} = await supabase.from('profiles').select('onboarded').eq('user_id',session.user.id).maybeSingle()
+      if(profile?.onboarded){
+        router.replace('/dashboard')
+        return
+      }
+    }
+    precheck()
+  },[])
 
   function handleContinue() {
     if (!income || !savings || !investments) return

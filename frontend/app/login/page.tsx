@@ -188,9 +188,9 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-screen bg-[#1a0f0a] flex flex-col items-center justify-center px-6 py-10">
-      <div className="font-serif text-3xl sm:text-4xl font-bold tracking-[4px] text-[#c9a84c] mb-8">
-        VALAM ★
-      </div>
+     {/*} <div className="font-serif text-3xl sm:text-4xl font-bold tracking-[4px] text-[#c9a84c] mb-8">
+        VALAM ★ 
+      </div> */}
       <h1 className="font-serif text-[#f5f0e8] font-bold text-4xl sm:text-5xl lg:text-6xl text-center leading-tight mb-4">
         Welcome back 👋
       </h1>
@@ -224,7 +224,7 @@ export default function LoginPage() {
           </p>
         }
         <button
-          onClick={()=>router.push('/login')}
+          onClick={()=>router.push('/forgot-password')}
           className="self-end text-sm text-[#c9a84c] hover:underline"
         >
           Forgot Password?

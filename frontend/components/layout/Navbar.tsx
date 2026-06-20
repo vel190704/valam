@@ -167,23 +167,41 @@ export default function Navbar() {
         )}
       </div>
 
-      {/* Mobile hamburger */}
-      <button
-        type="button"
-        onClick={() => setMenuOpen(open => !open)}
-        aria-label="Toggle navigation menu"
-        aria-expanded={menuOpen}
-        className="flex h-10 w-10 flex-col items-center justify-center gap-1.5 rounded-full md:hidden"
-        style={{
-          border: '1px solid var(--border)',
-          color: 'var(--gold)'
-        }}
-      >
-        <span className="h-0.5 w-5 rounded-full bg-current" />
-        <span className="h-0.5 w-5 rounded-full bg-current" />
-        <span className="h-0.5 w-5 rounded-full bg-current" />
-      </button>
+      {/* Mobile actions */}
+<div className="flex items-center gap-2 md:hidden">
 
+  {/* Theme button */}
+  <button
+    onClick={toggleTheme}
+    className="flex h-10 w-10 items-center justify-center rounded-full"
+    style={{
+      background: 'var(--surface2)',
+      color: 'var(--muted)',
+      border: '1px solid var(--border)',
+      boxShadow: '0 2px 10px rgba(0,0,0,.08)'
+    }}
+  >
+    {dark ? '☀️' : '🌙'}
+  </button>
+
+  {/* Hamburger */}
+  <button
+    type="button"
+    onClick={() => setMenuOpen(open => !open)}
+    className="flex h-10 w-10 flex-col items-center justify-center gap-1.5 rounded-full"
+    style={{
+      border: '1px solid var(--border)',
+      color: 'var(--gold)'
+    }}
+    aria-label="Toggle navigation menu"
+    aria-expanded={menuOpen}
+  >
+    <span className="h-0.5 w-5 rounded-full bg-current" />
+    <span className="h-0.5 w-5 rounded-full bg-current" />
+    <span className="h-0.5 w-5 rounded-full bg-current" />
+  </button>
+
+</div>
     </nav>
 
     {/* Mobile menu */}

@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 import Navbar from '@/components/layout/Navbar'
 import Footer from '@/components/layout/Footer'
+import { ThemeProvider } from './context/themecontext'
+
 
 export const metadata: Metadata = {
   title: 'VALAM — Know where you stand. Know where you can go.',
@@ -15,9 +17,14 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col bg-[#EFEDE8]">
+        <ThemeProvider>
         <Navbar />
-        <div className="flex-1">{children}</div>
+        <div className="flex-1">
+          
+          {children}
+          </div>
         <Footer />
+        </ThemeProvider>
       </body>
     </html>
   )

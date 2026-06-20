@@ -76,151 +76,259 @@ export default function ProfilePage() {
     )
   }
   return (
-    <main className="min-h-screen bg-[#1a0f0a] px-6 py-10 flex flex-col items-center">
+  <main
+    style={{
+      minHeight: '100vh',
+      background: 'var(--bg)',
+      padding: '2.5rem 1.5rem',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      transition: 'all .3s ease'
+    }}
+  >
 
-      {/* Logo */}
-      <div className=" font-serif text-3xl sm:text-4xl font-bold tracking-[4px] text-[#c9a84c] mb-10">
-      {/*  VALAM ★ */}
-      </div>
-
-      {/* Card */}
-      <div className="
-        w-full
-        max-w-lg
-        rounded-3xl
-        border border-[#c9a84c]/30
-        bg-[#25160f]
-        shadow-2xl
-        shadow-[#c9a84c]/10
-        p-8
-      ">
-
-        {/* Avatar */}
-        <div className="flex flex-col items-center">
-          <div className="
-            w-28
-            h-28
-            rounded-full
-            border-4
-            border-[#c9a84c]
-            bg-[#1a0f0a]
-            flex
-            items-center
-            justify-center
-            text-4xl
-            font-bold
-            text-[#f5f0e8]
-          ">
-            {user?.name?.charAt(0).toUpperCase()}
-          </div>
-          <h1 className="mt-5 text-3xl font-serif text-[#f5f0e8]">
-            Hey, {user?.name}
-          </h1>
-          {onboarded ? (
-
-  <p className="text-[#f5f0e8]/60 mt-1">
-    Growing with VALAM since {joinedMonth}
-  </p>
-
-) : (
-
-  <div className="mt-3 text-center">
-
-    <p className="text-[#f5f0e8]/60">
-      Complete your registration to save all your data.
-    </p>
-
-    <button
-      onClick={() =>
-        router.push('/onboarding/step1')
-      }
-      className="
-        mt-4
-        rounded-full
-        bg-gradient-to-r
-        from-[#f0d080]
-        via-[#c9a84c]
-        to-[#a07828]
-        px-5
-        py-2
-        text-sm
-        font-semibold
-        text-[#2a1a0e]
-        transition
-        hover:scale-105
-      "
+    {/* Logo */}
+    <div
+      style={{
+        fontFamily: "'Playfair Display', serif",
+        fontSize: 'clamp(2rem,4vw,2.5rem)',
+        fontWeight: 700,
+        letterSpacing: '4px',
+        color: 'var(--gold)',
+        marginBottom: '2.5rem'
+      }}
     >
-      Complete Registration →
-    </button>
-  </div>
-)}
+      {/* VALAM ★ */}
+    </div>
+
+    {/* Card */}
+    <div
+      style={{
+        width: '100%',
+        maxWidth: '32rem',
+        borderRadius: '1.5rem',
+        border: '1px solid var(--border)',
+        background: 'var(--surface)',
+        boxShadow: '0 20px 50px rgba(0,0,0,.12)',
+        padding: '2rem',
+        transition: 'all .3s ease'
+      }}
+    >
+
+      {/* Avatar */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center'
+        }}
+      >
+
+        <div
+          style={{
+            width: '7rem',
+            height: '7rem',
+            borderRadius: '9999px',
+            border: '4px solid var(--gold)',
+            background: 'var(--bg)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '2.25rem',
+            fontWeight: 700,
+            color: 'var(--text)'
+          }}
+        >
+          {user?.name?.charAt(0).toUpperCase()}
         </div>
 
-        {/* User Details */}
-        <div className="mt-10 space-y-5">
-          <div className="
-            rounded-2xl
-            border border-[#c9a84c]/20
-            px-5 py-4
-          ">
-            <p className="text-[#f5f0e8]/50 text-sm">
-              Email
-            </p>
-            <p className="text-[#f5f0e8] text-lg mt-1">
-              {user?.email}
-            </p>
-          </div>
-          <div className="
-            rounded-2xl
-            border border-[#c9a84c]/20
-            px-5 py-4
-          ">
-            <p className="text-[#f5f0e8]/50 text-sm">
-              Name
-            </p>
-            <p className="text-[#f5f0e8] text-lg mt-1">
-              {user?.name}
-            </p>
-          </div>
-          {onboarded && (
-  <div className="
-    rounded-2xl
-    border border-[#c9a84c]/20
-    px-5 py-4
-  ">
-    <p className="text-[#f5f0e8]/50 text-sm">
-      Age
-    </p>
-    <p className="text-[#f5f0e8] text-lg mt-1">
-      {user?.age}
-    </p>
-  </div>
-)}
-        </div>
-        {/* Logout */}
-        <button
-          onClick={handleLogout}
-          className="
-          mt-10
-          w-full
-          py-3
-          rounded-full
-          font-bold
-          text-[#2a1a0e]
-          bg-gradient-to-r
-          from-[#f0d080]
-          via-[#c9a84c]
-          to-[#a07828]
-          shadow-lg
-          shadow-[#c9a84c]/20
-          transition
-          hover:scale-[1.02]
-          active:scale-[0.98]
-          "
+        <h1
+          style={{
+            marginTop: '1.25rem',
+            fontFamily: "'Playfair Display', serif",
+            fontSize: '1.875rem',
+            color: 'var(--text)'
+          }}
         >
-          Logout
-        </button>
+          Hey, {user?.name}
+        </h1>
+
+        {onboarded ? (
+
+          <p
+            style={{
+              color: 'var(--muted)',
+              marginTop: '.25rem'
+            }}
+          >
+            Growing with VALAM since {joinedMonth}
+          </p>
+
+        ) : (
+
+          <div
+            style={{
+              marginTop: '.75rem',
+              textAlign: 'center'
+            }}
+          >
+
+            <p
+              style={{
+                color: 'var(--muted)'
+              }}
+            >
+              Complete your registration to save all your data.
+            </p>
+
+            <button
+              onClick={() =>
+                router.push('/onboarding/step1')
+              }
+              style={{
+                marginTop: '1rem',
+                borderRadius: '9999px',
+                background:
+                  'linear-gradient(135deg,var(--gold-lt) 0%,var(--gold) 40%,var(--bronze) 100%)',
+                padding: '.5rem 1.25rem',
+                fontSize: '.875rem',
+                fontWeight: 600,
+                color: '#2a1a0e',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'transform .2s ease'
+              }}
+            >
+              Complete Registration →
+            </button>
+
+          </div>
+
+        )}
+
       </div>
-    </main>
-  )
+
+      {/* User Details */}
+      <div
+        style={{
+          marginTop: '2.5rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1.25rem'
+        }}
+      >
+
+        <div
+          style={{
+            borderRadius: '1rem',
+            border: '1px solid var(--border)',
+            padding: '1rem 1.25rem'
+          }}
+        >
+          <p
+            style={{
+              color: 'var(--muted)',
+              fontSize: '.875rem'
+            }}
+          >
+            Email
+          </p>
+
+          <p
+            style={{
+              color: 'var(--text)',
+              fontSize: '1.125rem',
+              marginTop: '.25rem'
+            }}
+          >
+            {user?.email}
+          </p>
+        </div>
+
+        <div
+          style={{
+            borderRadius: '1rem',
+            border: '1px solid var(--border)',
+            padding: '1rem 1.25rem'
+          }}
+        >
+          <p
+            style={{
+              color: 'var(--muted)',
+              fontSize: '.875rem'
+            }}
+          >
+            Name
+          </p>
+
+          <p
+            style={{
+              color: 'var(--text)',
+              fontSize: '1.125rem',
+              marginTop: '.25rem'
+            }}
+          >
+            {user?.name}
+          </p>
+        </div>
+
+        {onboarded && (
+
+          <div
+            style={{
+              borderRadius: '1rem',
+              border: '1px solid var(--border)',
+              padding: '1rem 1.25rem'
+            }}
+          >
+            <p
+              style={{
+                color: 'var(--muted)',
+                fontSize: '.875rem'
+              }}
+            >
+              Age
+            </p>
+
+            <p
+              style={{
+                color: 'var(--text)',
+                fontSize: '1.125rem',
+                marginTop: '.25rem'
+              }}
+            >
+              {user?.age}
+            </p>
+          </div>
+
+        )}
+
+      </div>
+
+      {/* Logout */}
+      <button
+        onClick={handleLogout}
+        style={{
+          marginTop: '2.5rem',
+          width: '100%',
+          padding: '.85rem',
+          borderRadius: '9999px',
+          fontWeight: 700,
+          color: '#2a1a0e',
+          border: 'none',
+          cursor: 'pointer',
+          background:
+            'linear-gradient(135deg,var(--gold-lt) 0%,var(--gold) 40%,var(--bronze) 100%)',
+          boxShadow: '0 8px 24px rgba(184,146,74,.25)',
+          transition: 'transform .2s ease'
+        }}
+      >
+        Logout
+      </button>
+
+    </div>
+
+  </main>
+)
 }

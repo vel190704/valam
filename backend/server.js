@@ -2,10 +2,14 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import { Resend } from 'resend'
 
 dotenv.config();
 dotenv.config({ path: "../frontend/.env.local" });
 
+const resend = new Resend(
+  process.env.RESEND_API_KEY
+)
 const app = express();
 app.use(cors({
   origin: [
@@ -542,6 +546,55 @@ app.delete("/income/:id", requireUser, async (req, res) => {
   return res.json({ success: true });
 });
 
+// CONTACT US EMAIL API
+app.post('/contact',async (req,res)=>{
+    try{
+      const {
+        name,
+        email,
+        message
+      } = req.body
+      await resend.emails.send({
+        from:
+          'VALAM <onboarding@resend.dev>',
+        to:
+          'valamhq@gmail.com',
+        subject:
+          `Contact Form from ${name}`,
+        html:`
+          <h2>
+            VALAM Contact Form
+          </h2>
+          <p>
+            <b>Name:</b>
+            ${name}
+          </p>
+          <p>
+            <b>Email:</b>
+            ${email}
+          </p>
+          <p>
+            <b>Message:</b>
+          </p>
+          <p>
+            ${message}
+          </p>
+        `
+      })
+      res.json({
+        success:true
+      })
+    }
+    catch(err){
+      console.error(err)
+      res
+      .status(500)
+      .json({
+        error:
+          'Failed to send email'
+      })
+    }
+})
 // ── Start server ──────────────────────────────────────────────────────────────
 const PORT = process.env.PORT ?? 5000;
 app.listen(PORT, () => {

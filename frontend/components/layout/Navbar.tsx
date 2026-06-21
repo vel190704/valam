@@ -86,17 +86,17 @@ export default function Navbar() {
     <nav className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
 
       {/* Logo */}
-      <Link
-        href="/"
-        aria-label="Go to home"
-        onClick={() => setMenuOpen(false)}
-        className="flex h-11 w-11 items-center justify-center rounded-full font-serif text-xl font-bold text-white transition hover:scale-105"
+       <Link
+       href='/'
         style={{
-          background: 'var(--gold)',
-          boxShadow: '0 4px 20px rgba(184,146,74,.25)'
+          fontFamily: "'Playfair Display', serif",
+          fontSize: '1.125rem',
+          fontWeight: 700,
+          letterSpacing: '0.2em',
+          color: 'var(--gold)'
         }}
       >
-        V
+      VALAM
       </Link>
 
       {/* Desktop nav links */}

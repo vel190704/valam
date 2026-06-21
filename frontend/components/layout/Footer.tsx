@@ -7,10 +7,12 @@ export default function Footer() {
   const [hidden, setHidden] = useState(false)
 
   useEffect(() => {
+    async function foot(){
     const appPages = ['/dashboard', '/portfolio', '/networth',
       '/income', '/result', '/onboarding', '/auth', '/profile']
     setHidden(appPages.some(p => window.location.pathname.startsWith(p)))
-  }, [])
+ foot()
+ }}, [])
 
   if (hidden) return null
 

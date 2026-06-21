@@ -64,181 +64,404 @@ export default function ContactPage() {
       setLoading(false)
     }
   }
-  return (
-    <main className="
-      min-h-screen
-      bg-[#1a0f0a]
-      px-6
-      py-20
-      flex
-      justify-center
-    ">
-      <div className="
-        w-full
-        max-w-2xl
-      ">
-        <p className="
-          text-[#c9a84c]
-          uppercase
-          tracking-[3px]
-          text-sm
-          text-center
-        ">
-           contact us
-        </p>
-        <h1 className="
-          mt-4
-          text-4xl
-          font-serif
-          text-[#f5f0e8]
-          text-center
-        ">
-          Have a question or idea
-          for VALAM?
-        </h1>
-        <p className="
-          mt-5
-          text-center
-          text-[#f5f0e8]/60
-          max-w-xl
-          mx-auto
-        ">
-          We&apos;d love to hear from you.
-          Reach out with feedback,
-          partnerships or support
-          requests.
-        </p>
-        <form
-          onSubmit={handleSubmit}
+ return (
+  <main
+    style={{
+      minHeight: '100vh',
+      background: 'var(--bg)',
+      color: 'var(--text)',
+      transition: 'all .3s ease',
+      padding: '8rem 1rem 4rem',
+    }}
+    className="sm:px-6 lg:px-8 flex justify-center"
+  >
+    <div className="w-full max-w-2xl">
+
+      {/* Heading */}
+
+      <p
+        style={{
+          color: 'var(--gold)',
+          textTransform: 'uppercase',
+          letterSpacing: '.25em',
+          fontWeight: 600,
+          textAlign: 'center',
+          fontSize: '.875rem',
+        }}
+      >
+        CONTACT US   
+      </p>
+
+      <h1
+        className="font-serif sm:text-5xl"
+        style={{
+          color: 'var(--text)',
+          textAlign: 'center',
+          marginTop: '1rem',
+          fontSize: 'clamp(2.25rem,5vw,4rem)',
+          lineHeight: 1.1,
+          fontWeight: 700,
+        }}
+      >
+        Have a question or idea for VALAM?
+      </h1>
+
+      <p
+        style={{
+          color: 'var(--muted)',
+          textAlign: 'center',
+          maxWidth: '42rem',
+          margin: '1.5rem auto 0',
+          lineHeight: 1.8,
+          fontSize: '1.125rem',
+        }}
+      >
+        We&apos;d love to hear from you.
+        Reach out with feedback,
+        partnerships or support requests.
+      </p>
+
+      {/* Form */}
+
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          marginTop: '3rem',
+
+          background: 'var(--surface)',
+
+          border:
+            '1px solid var(--border)',
+
+          borderRadius: '1.5rem',
+
+          padding: '2rem',
+
+          boxShadow:
+            '0 8px 30px rgba(0,0,0,.06)',
+
+          transition:
+            'all .3s ease',
+        }}
+        className="space-y-6"
+      >
+
+        {/* Name */}
+
+        <input
+
+          type="text"
+
+          placeholder="Name"
+
+          value={name}
+
+          onChange={e =>
+            setName(
+              e.target.value
+            )
+          }
+
+          style={{
+
+            width:'100%',
+
+            background:
+
+              'var(--bg)',
+
+            color:
+
+              'var(--text)',
+
+            border:
+
+              '1px solid var(--border)',
+
+            borderRadius:
+
+              '1rem',
+
+            padding:
+
+              '1rem 1.25rem',
+
+            transition:
+
+              'all .3s ease',
+
+          }}
+
           className="
-            mt-12
-            rounded-3xl
-            border
-            border-[#c9a84c]/25
-            bg-[#25160f]
-            p-8
-            space-y-6
+            outline-none
           "
+
+        />
+
+        {/* Email */}
+
+        <input
+
+          type="email"
+
+          placeholder="Email"
+
+          value={email}
+
+          onChange={e =>
+            setEmail(
+              e.target.value
+            )
+          }
+
+          style={{
+
+            width:'100%',
+
+            background:
+
+              'var(--bg)',
+
+            color:
+
+              'var(--text)',
+
+            border:
+
+              '1px solid var(--border)',
+
+            borderRadius:
+
+              '1rem',
+
+            padding:
+
+              '1rem 1.25rem',
+
+            transition:
+
+              'all .3s ease',
+
+          }}
+
+          className="
+            outline-none
+          "
+
+        />
+
+        {/* Message */}
+
+        <textarea
+
+          rows={6}
+
+          placeholder="Message"
+
+          value={message}
+
+          onChange={e =>
+            setMessage(
+              e.target.value
+            )
+          }
+
+          style={{
+
+            width:'100%',
+
+            background:
+
+              'var(--bg)',
+
+            color:
+
+              'var(--text)',
+
+            border:
+
+              '1px solid var(--border)',
+
+            borderRadius:
+
+              '1rem',
+
+            padding:
+
+              '1rem 1.25rem',
+
+            resize:
+
+              'none',
+
+            transition:
+
+              'all .3s ease',
+
+          }}
+
+          className="
+            outline-none
+          "
+
+        />
+
+        {/* Error */}
+
+        {
+
+          error &&
+
+          (
+
+            <p
+
+              style={{
+
+                color:
+
+                  'var(--red)',
+
+                fontSize:
+
+                  '.9rem'
+
+              }}
+
+            >
+
+              {error}
+
+            </p>
+
+          )
+
+        }
+
+        {/* Success */}
+
+        {
+
+          success &&
+
+          (
+
+            <p
+
+              style={{
+
+                color:
+
+                  'var(--green)',
+
+                fontSize:
+
+                  '.9rem'
+
+              }}
+
+            >
+
+              Message sent successfully!
+
+            </p>
+
+          )
+
+        }
+
+        {/* Button */}
+
+        <button
+
+          type="submit"
+
+          disabled={loading}
+
+          style={{
+
+            width:
+
+              '100%',
+
+            padding:
+
+              '1rem',
+
+            borderRadius:
+
+              '999px',
+
+            border:
+
+              'none',
+
+            cursor:
+
+              'pointer',
+
+            fontWeight:
+
+              700,
+
+            fontSize:
+
+              '1rem',
+
+            color:
+
+              '#2a1a0e',
+
+            background:
+
+              `linear-gradient(
+                135deg,
+
+                var(--gold-lt),
+
+                var(--gold),
+
+                var(--bronze)
+              )`,
+
+            boxShadow:
+
+              '0 4px 24px rgba(201,168,76,.25)',
+
+            transition:
+
+              'all .25s ease',
+
+          }}
+
+          className="
+            hover:scale-[1.02]
+            active:scale-[0.98]
+            disabled:opacity-50
+          "
+
         >
-          <input
-            type="text"
-            placeholder="Name"
-            value={name}
-            onChange={e =>
-              setName(
-                e.target.value
-              )
-            }
-            className="
-              w-full
-              rounded-2xl
-              border
-              border-[#c9a84c]/20
-              bg-[#1a0f0a]
-              px-5
-              py-4
-              text-[#f5f0e8]
-              outline-none
-              focus:border-[#c9a84c]
-            "
-          />
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={e =>
-              setEmail(
-                e.target.value
-              )
-            }
-            className="
-              w-full
-              rounded-2xl
-              border
-              border-[#c9a84c]/20
-              bg-[#1a0f0a]
-              px-5
-              py-4
-              text-[#f5f0e8]
-              outline-none
-              focus:border-[#c9a84c]
-            "
-          />
-          <textarea
-            rows={6}
-            placeholder="Message"
-            value={message}
-            onChange={e =>
-              setMessage(
-                e.target.value
-              )
-            }
-            className="
-              w-full
-              rounded-2xl
-              border
-              border-[#c9a84c]/20
-              bg-[#1a0f0a]
-              px-5
-              py-4
-              text-[#f5f0e8]
-              outline-none
-              resize-none
-              focus:border-[#c9a84c]
-            "
-          />
+
           {
-            error &&
-            (
-              <p className="
-                text-red-400
-                text-sm
-              ">
-                {error}
-              </p>
-            )
+
+            loading
+
+            ?
+
+            'Sending...'
+
+            :
+
+            'Contact Us'
+
           }
-          {
-            success &&
-            (
-              <p className="
-                text-green-400
-                text-sm
-              ">
-                Message sent successfully!
-              </p>
-            )
-          }
-          <button
-            type="submit"
-            disabled={loading}
-            className="
-              w-full
-              py-4
-              rounded-full
-              font-bold
-              text-[#2a1a0e]
-              bg-gradient-to-r
-              from-[#f0d080]
-              via-[#c9a84c]
-              to-[#a07828]
-              shadow-lg
-              shadow-[#c9a84c]/20
-              transition
-              hover:scale-[1.02]
-              disabled:opacity-50
-            "
-          >
-            {
-              loading
-              ?
-              'Sending...'
-              :
-              'Contact Us'
-            }
-          </button>
-        </form>
-      </div>
-    </main>
-  )
+
+        </button>
+
+      </form>
+
+    </div>
+
+  </main>
+)
 }

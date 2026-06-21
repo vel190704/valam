@@ -170,221 +170,794 @@ export default function SignupPage() {
   }
 
   // ── Styles ──────────────────────────────────────────────────────────────────
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    background: 'rgba(245,240,232,0.06)',
-    border: '1px solid rgba(201,168,76,0.25)',
-    borderRadius: 10,
-    padding: '12px 14px',
-    fontSize: 14,
-    color: '#F5F0E8',
-    fontFamily: 'Inter, sans-serif',
-    outline: 'none',
-    marginBottom: 12,
-  }
+  const inputStyle = {
+  width: '100%',
 
-  const labelStyle: React.CSSProperties = {
-    fontSize: 11,
-    color: 'rgba(245,240,232,0.5)',
-    fontWeight: 600,
-    letterSpacing: '0.04em',
-    textTransform: 'uppercase',
-    display: 'block',
-    marginBottom: 4,
-    fontFamily: 'Inter, sans-serif',
-  }
+  background: 'var(--bg)',
+
+  color: 'var(--text)',
+
+  border: '1px solid var(--border-md)',
+
+  borderRadius: 12,
+
+  padding: '12px 14px',
+
+  fontSize: 14,
+
+  fontFamily: 'Inter, sans-serif',
+
+  outline: 'none',
+
+  marginBottom: 16,
+
+  transition: 'all .3s ease',
+
+  boxSizing: 'border-box' as const,
+}
+
+ const labelStyle = {
+  display: 'block',
+
+  marginBottom: 8,
+
+  marginTop: 16,
+
+  fontSize: 13,
+
+  fontWeight: 600,
+
+  color: 'var(--text-sm)',
+
+  fontFamily: 'Inter, sans-serif',
+}
 
   // ── Render ──────────────────────────────────────────────────────────────────
-  return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-28 sm:px-6 lg:px-8"
-      style={{ background: '#1a0f0a' }}>
+ return (
+  <main
+    className="
+      flex
+      min-h-screen
+      items-center
+      justify-center
+      px-4
+      py-28
+      sm:px-6
+      lg:px-8
+    "
+    style={{
+      background: 'var(--bg)',
+      transition: 'all .3s ease',
+    }}
+  >
 
-      <div className="w-full max-w-[480px] px-5 py-8 sm:px-10 sm:py-12"
+    <div
+      className="
+        w-full
+        max-w-[480px]
+        px-5
+        py-8
+        sm:px-10
+        sm:py-12
+      "
+      style={{
+
+        background:
+
+          'var(--surface)',
+
+        border:
+
+          '1px solid var(--border)',
+
+        borderRadius:
+
+          20,
+
+        boxShadow:
+
+          '0 8px 40px rgba(0,0,0,.12)',
+
+        transition:
+
+          'all .3s ease',
+
+      }}
+    >
+
+      {/* Header */}
+
+      <div
         style={{
-          background: 'rgba(245,240,232,0.03)',
-          border: '1px solid rgba(201,168,76,0.15)',
-          borderRadius: 20,
-          boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
-        }}>
 
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{
-            fontFamily: 'Playfair Display, serif',
-            fontSize: '1.75rem',
-            fontWeight: 700,
-            color: '#c9a84c',
-            letterSpacing: '0.1em',
-            marginBottom: 6,
-          }}>
-            VALAM
-          </div>
-          <div style={{
-            fontSize: 13,
-            color: 'rgba(245,240,232,0.55)',
-            fontFamily: 'Inter, sans-serif',
-          }}>
-            Create your account
-          </div>
-          {/* Pre-fill notice if coming from onboarding */}
-          {hasPendingAssessment && (
-            <div style={{
-              marginTop: 10,
-              padding: '8px 12px',
-              background: 'rgba(201,168,76,0.08)',
-              border: '1px solid rgba(201,168,76,0.2)',
-              borderRadius: 8,
-              fontSize: 12,
-              color: '#c9a84c',
-              fontFamily: 'Inter, sans-serif',
-            }}>
+          textAlign:
+
+            'center',
+
+          marginBottom:
+
+            28,
+
+        }}
+      >
+
+        <div
+          style={{
+
+            fontFamily:
+
+              'Playfair Display, serif',
+
+            fontSize:
+
+              '1.75rem',
+
+            fontWeight:
+
+              700,
+
+            color:
+
+              'var(--gold)',
+
+            letterSpacing:
+
+              '.1em',
+
+            marginBottom:
+
+              6,
+
+          }}
+        >
+
+          VALAM
+
+        </div>
+
+        <div
+          style={{
+
+            fontSize:
+
+              13,
+
+            color:
+
+              'var(--muted)',
+
+            fontFamily:
+
+              'Inter, sans-serif',
+
+          }}
+        >
+
+          Create your account
+
+        </div>
+
+        {
+
+          hasPendingAssessment && (
+
+            <div
+
+              style={{
+
+                marginTop:
+
+                  12,
+
+                padding:
+
+                  '8px 12px',
+
+                background:
+
+                  'rgba(201,168,76,.08)',
+
+                border:
+
+                  '1px solid var(--border)',
+
+                borderRadius:
+
+                  8,
+
+                fontSize:
+
+                  12,
+
+                color:
+
+                  'var(--gold)',
+
+                fontFamily:
+
+                  'Inter,sans-serif',
+
+              }}
+
+            >
+
               ✓ Your assessment will be saved automatically on signup
+
             </div>
-          )}
-        </div>
 
-        {/* Error */}
-        {error && (
-          <div style={{
-            background: 'rgba(192,57,43,0.12)',
-            border: '1px solid rgba(192,57,43,0.3)',
-            borderRadius: 10,
-            padding: '10px 14px',
-            fontSize: 13,
-            color: '#E57373',
-            marginBottom: 16,
-            fontFamily: 'Inter, sans-serif',
-          }}>
-            {error}
-          </div>
-        )}
+          )
 
-        {/* Form */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 0 }}>
-          <div>
-            <label style={labelStyle}>Full Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Your name"
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>Age</label>
-            <input
-              type="number"
-              value={age}
-              onChange={e => setAge(e.target.value)}
-              placeholder="e.g. 25"
-              min={18}
-              max={80}
-              style={inputStyle}
-            />
-          </div>
-        </div>
+        }
 
-        <label style={labelStyle}>Email</label>
-        <input
-          type="email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          style={inputStyle}
-        />
-
-        <label style={labelStyle}>Password</label>
-        <input
-          type="password"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          placeholder="Min 6 characters"
-          style={{ ...inputStyle, marginBottom: 20 }}
-        />
-
-        {/* Signup button */}
-        <button
-          onClick={handleSignup}
-          disabled={loading}
-          className="disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{
-            width: '100%',
-            background: 'linear-gradient(135deg, #c9a84c, #8b6914)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 12,
-            padding: '13px',
-            fontSize: 15,
-            fontWeight: 700,
-            fontFamily: 'Inter, sans-serif',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            marginBottom: 14,
-            letterSpacing: '0.02em',
-          }}>
-          {loading ? 'Creating account…' : 'Create Account →'}
-        </button>
-
-        {/* Divider */}
-        <div style={{
-          display: 'flex', alignItems: 'center',
-          gap: 10, marginBottom: 14,
-        }}>
-          <div style={{ flex: 1, height: 1, background: 'rgba(201,168,76,0.15)' }}/>
-          <span style={{ fontSize: 11, color: 'rgba(245,240,232,0.35)', fontFamily: 'Inter, sans-serif' }}>
-            or
-          </span>
-          <div style={{ flex: 1, height: 1, background: 'rgba(201,168,76,0.15)' }}/>
-        </div>
-
-        {/* Google OAuth button */}
-        <button
-          onClick={handleGoogle}
-          disabled={loading}
-          className="disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{
-            width: '100%',
-            background: 'rgba(245,240,232,0.05)',
-            border: '1px solid rgba(201,168,76,0.25)',
-            borderRadius: 12,
-            padding: '12px',
-            fontSize: 14,
-            fontWeight: 600,
-            color: '#F5F0E8',
-            fontFamily: 'Inter, sans-serif',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 10,
-            marginBottom: 20,
-          }}>
-          <svg width="18" height="18" viewBox="0 0 18 18">
-            <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
-            <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
-            <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
-            <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
-          </svg>
-          Continue with Google
-        </button>
-
-        {/* Login link */}
-        <div style={{
-          textAlign: 'center',
-          fontSize: 13,
-          color: 'rgba(245,240,232,0.5)',
-          fontFamily: 'Inter, sans-serif',
-        }}>
-          Already have an account?{' '}
-          <a href="/login" style={{
-            color: '#c9a84c',
-            textDecoration: 'none',
-            fontWeight: 600,
-          }}>
-            Log in
-          </a>
-        </div>
       </div>
-    </main>
-  )
+
+      {/* Error */}
+
+      {
+
+        error && (
+
+          <div
+
+            style={{
+
+              background:
+
+                'rgba(192,57,43,.12)',
+
+              border:
+
+                '1px solid rgba(192,57,43,.3)',
+
+              borderRadius:
+
+                10,
+
+              padding:
+
+                '10px 14px',
+
+              fontSize:
+
+                13,
+
+              color:
+
+                'var(--red)',
+
+              marginBottom:
+
+                16,
+
+              fontFamily:
+
+                'Inter,sans-serif',
+
+            }}
+
+          >
+
+            {error}
+
+          </div>
+
+        )
+
+      }
+
+      {/* Name + Age */}
+
+      <div
+        style={{
+
+          display:
+
+            'grid',
+
+          gridTemplateColumns:
+
+            '1fr 1fr',
+
+          gap:
+
+            12,
+
+          marginBottom:
+
+            0,
+
+        }}
+      >
+
+        <div>
+
+          <label style={labelStyle}>
+
+            Full Name
+
+          </label>
+
+          <input
+
+            type="text"
+
+            value={name}
+
+            onChange={
+
+              e =>
+
+              setName(
+
+                e.target.value
+
+              )
+
+            }
+
+            placeholder="Your name"
+
+            style={inputStyle}
+
+          />
+
+        </div>
+
+        <div>
+
+          <label style={labelStyle}>
+
+            Age
+
+          </label>
+
+          <input
+
+            type="number"
+
+            value={age}
+
+            onChange={
+
+              e =>
+
+              setAge(
+
+                e.target.value
+
+              )
+
+            }
+
+            placeholder="e.g. 25"
+
+            min={18}
+
+            max={80}
+
+            style={inputStyle}
+
+          />
+
+        </div>
+
+      </div>
+
+      <label style={labelStyle}>
+
+        Email
+
+      </label>
+
+      <input
+
+        type="email"
+
+        value={email}
+
+        onChange={
+
+          e =>
+
+          setEmail(
+
+            e.target.value
+
+          )
+
+        }
+
+        placeholder="you@example.com"
+
+        style={inputStyle}
+
+      />
+
+      <label style={labelStyle}>
+
+        Password
+
+      </label>
+
+      <input
+
+        type="password"
+
+        value={password}
+
+        onChange={
+
+          e =>
+
+          setPassword(
+
+            e.target.value
+
+          )
+
+        }
+
+        placeholder="Min 6 characters"
+
+        style={{
+
+          ...inputStyle,
+
+          marginBottom:
+
+            20,
+
+        }}
+
+      />
+
+      {/* Signup */}
+
+      <button
+
+        onClick={handleSignup}
+
+        disabled={loading}
+
+        className="
+          disabled:opacity-50
+          disabled:cursor-not-allowed
+        "
+
+        style={{
+
+          width:
+
+            '100%',
+
+          background:
+
+            `linear-gradient(
+              135deg,
+
+              var(--gold-lt),
+
+              var(--gold),
+
+              var(--bronze)
+            )`,
+
+          color:
+
+            '#fff',
+
+          border:
+
+            'none',
+
+          borderRadius:
+
+            12,
+
+          padding:
+
+            '13px',
+
+          fontSize:
+
+            15,
+
+          fontWeight:
+
+            700,
+
+          fontFamily:
+
+            'Inter,sans-serif',
+
+          cursor:
+
+            loading
+
+            ?
+
+            'not-allowed'
+
+            :
+
+            'pointer',
+
+          marginBottom:
+
+            14,
+
+        }}
+
+      >
+
+        {
+
+          loading
+
+          ?
+
+          'Creating account…'
+
+          :
+
+          'Create Account →'
+
+        }
+
+      </button>
+
+      {/* Divider */}
+
+      <div
+
+        style={{
+
+          display:
+
+            'flex',
+
+          alignItems:
+
+            'center',
+
+          gap:
+
+            10,
+
+          marginBottom:
+
+            14,
+
+        }}
+
+      >
+
+        <div
+
+          style={{
+
+            flex:
+
+              1,
+
+            height:
+
+              1,
+
+            background:
+
+              'var(--border)',
+
+          }}
+
+        />
+
+        <span
+
+          style={{
+
+            fontSize:
+
+              11,
+
+            color:
+
+              'var(--muted)',
+
+            fontFamily:
+
+              'Inter,sans-serif',
+
+          }}
+
+        >
+
+          or
+
+        </span>
+
+        <div
+
+          style={{
+
+            flex:
+
+              1,
+
+            height:
+
+              1,
+
+            background:
+
+              'var(--border)',
+
+          }}
+
+        />
+
+      </div>
+
+      {/* Google */}
+
+      <button
+
+        onClick={handleGoogle}
+
+        disabled={loading}
+
+        className="
+          disabled:opacity-50
+          disabled:cursor-not-allowed
+        "
+
+        style={{
+
+          width:
+
+            '100%',
+
+          background:
+
+            'var(--bg)',
+
+          border:
+
+            '1px solid var(--border)',
+
+          borderRadius:
+
+            12,
+
+          padding:
+
+            '12px',
+
+          fontSize:
+
+            14,
+
+          fontWeight:
+
+            600,
+
+          color:
+
+            'var(--text)',
+
+          fontFamily:
+
+            'Inter,sans-serif',
+
+          cursor:
+
+            loading
+
+            ?
+
+            'not-allowed'
+
+            :
+
+            'pointer',
+
+          display:
+
+            'flex',
+
+          alignItems:
+
+            'center',
+
+          justifyContent:
+
+            'center',
+
+          gap:
+
+            10,
+
+          marginBottom:
+
+            20,
+
+          transition:
+
+            'all .3s ease',
+
+        }}
+
+      >
+
+       <svg width="20" height="20" viewBox="0 0 48 48">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+
+        Continue with Google
+
+      </button>
+
+      {/* Login */}
+
+      <div
+
+        style={{
+
+          textAlign:
+
+            'center',
+
+          fontSize:
+
+            13,
+
+          color:
+
+            'var(--muted)',
+
+          fontFamily:
+
+            'Inter,sans-serif',
+
+        }}
+
+      >
+
+        Already have an account?{' '}
+
+        <a
+
+          href="/login"
+
+          style={{
+
+            color:
+
+              'var(--gold)',
+
+            textDecoration:
+
+              'none',
+
+            fontWeight:
+
+              600,
+
+          }}
+
+        >
+
+          Log in
+
+        </a>
+
+      </div>
+
+    </div>
+
+  </main>
+)
 }

@@ -153,7 +153,7 @@ export default function DashboardPage() {
           setDataSource('live')
         }
       } catch (err) {
-        console.error('Failed to load profile:', err)
+        console.log('Failed to load profile:', err)
       }
       setLoading(false)
     }

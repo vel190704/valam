@@ -84,7 +84,7 @@ export default function ContactPage() {
           text-sm
           text-center
         ">
-          Contact
+           contact us
         </p>
         <h1 className="
           mt-4

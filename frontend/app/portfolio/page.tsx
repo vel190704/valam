@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import DNavbar from '@/components/layout/dnavbar'
 
 // ── Types ──────────────────────────────────────────────────────────────────
-type InvestmentType = 'mf' | 'stock' | 'fd' | 'crypto' | 'bond' | 'etf'
+type InvestmentType = 'mf' | 'stock' | 'fd' | 'crypto' | 'bond' | 'etf'|'commodity'
 type MutualFundType =
   | 'largecap'
   | 'midcap'
@@ -35,6 +35,7 @@ const TYPE_META: Record<InvestmentType, { label: string; color: string; emoji: s
   crypto:     { label: 'Crypto',        color: '#9B59B6', emoji: '₿'  },
   bond:       { label: 'Bond',          color: '#27AE60', emoji: '📜' },
   etf:        { label: 'ETF',           color: '#16A085', emoji: '🔷' },
+  commodity:  {label:'Commodity', color:'#DBA512',emoji:'💵'}
 }
 
 const MF_META: Record<
@@ -750,6 +751,7 @@ null,
       setFormError(j.error ?? 'Failed to save')
     }
     setSaving(false)
+    console.log(res);
   }
 
   function handleDuplicate(inv: Investment) {

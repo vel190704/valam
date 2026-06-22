@@ -55,7 +55,7 @@ const VALID_GOALS = [
 ];
 
 const VALID_INVESTMENT_TYPES = [
-  "mf", "stock", "fd", "crypto", "bond", "etf", "realestate"
+  "mf", "stock", "fd", "crypto", "bond", "etf", "commodity"
 ];
 
 const VALID_MF_TYPES = [

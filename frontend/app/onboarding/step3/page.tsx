@@ -51,7 +51,7 @@ export default function Step3() {
     sessionStorage.setItem('valam_income',      income)
     sessionStorage.setItem('valam_savings',     savings)
     sessionStorage.setItem('valam_investments', investments)
-    router.push('/onboarding/step4')
+    router.push('/onboarding/step3b')
   }
 
   const ready = income && savings && investments

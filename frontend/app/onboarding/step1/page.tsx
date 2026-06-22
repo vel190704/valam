@@ -21,6 +21,17 @@ export default function Step1() {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session?.user) return
 
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('onboarded')
+          .eq('user_id', session.user.id)
+          .maybeSingle()
+
+        if (profile?.onboarded) {
+          router.replace('/dashboard')
+          return
+        }
+
         const BASE = process.env.NEXT_PUBLIC_BACKEND_URL
           ?? 'http://localhost:5000'
         const res = await fetch(`${BASE}/profile`, {

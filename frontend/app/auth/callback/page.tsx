@@ -23,7 +23,37 @@ export default function AuthCallbackPage() {
               .eq('user_id', data.session.user.id)
               .maybeSingle()
 
-            router.replace(profile ? '/dashboard' : '/onboarding/step1')
+            if (profile) {
+              router.replace('/dashboard')
+              return
+            }
+
+            // New user — check if they filled the form as a guest before signing in
+            const pending = localStorage.getItem('pendingAssessment')
+            if (pending) {
+              try {
+                const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+                const assessment = JSON.parse(pending)
+                const res = await fetch(`${BASE}/profile/save-assessment`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${data.session.access_token}`
+                  },
+                  body: JSON.stringify(assessment)
+                })
+                if (res.ok) {
+                  localStorage.removeItem('pendingAssessment')
+                  router.replace('/')
+                } else {
+                  router.replace('/onboarding/step1')
+                }
+              } catch {
+                router.replace('/onboarding/step1')
+              }
+            } else {
+              router.replace('/onboarding/step1')
+            }
             return
           }
         }
@@ -40,7 +70,35 @@ export default function AuthCallbackPage() {
             .eq('user_id', session.user.id)
             .maybeSingle()
 
-          router.replace(profile ? '/dashboard' : '/onboarding/step1')
+          if (profile) {
+            router.replace('/dashboard')
+          } else {
+            const pending = localStorage.getItem('pendingAssessment')
+            if (pending) {
+              try {
+                const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+                const assessment = JSON.parse(pending)
+                const res = await fetch(`${BASE}/profile/save-assessment`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${session.access_token}`
+                  },
+                  body: JSON.stringify(assessment)
+                })
+                if (res.ok) {
+                  localStorage.removeItem('pendingAssessment')
+                  router.replace('/')
+                } else {
+                  router.replace('/onboarding/step1')
+                }
+              } catch {
+                router.replace('/onboarding/step1')
+              }
+            } else {
+              router.replace('/onboarding/step1')
+            }
+          }
         } else {
           router.replace('/login?error=oauth_failed')
         }

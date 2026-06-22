@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { getAllocation, TYPE_TO_SUGGESTED } from '@/lib/allocation'
+import { getAllocationByRisk, TYPE_TO_SUGGESTED, type RiskLevel } from '@/lib/allocation'
+import DNavbar from '@/components/layout/dnavbar'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface Investment {
@@ -95,23 +96,11 @@ function Donut({ slices, label, total }: {
 // ── Page ──────────────────────────────────────────────────────────────────
 export default function AllocationPage() {
   const router = useRouter()
-  const [dark, setDark] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [valamLevel, setValamLevel] = useState(3)
   const [investments, setInvestments] = useState<Investment[]>([])
-
-  useEffect(() => {
-    const isDark = document.body.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
-    if (isDark) { document.body.classList.add('dark'); setDark(true) }
-  }, [])
-
-  const toggleDark = () => {
-    const next = !dark
-    setDark(next)
-    document.body.classList.toggle('dark', next)
-    localStorage.setItem('theme', next ? 'dark' : 'light')
-  }
+  const [risk, setRisk] = useState<RiskLevel>('medium')
 
   useEffect(() => {
     async function load() {
@@ -154,7 +143,7 @@ export default function AllocationPage() {
     color: TYPE_COLORS[type] ?? '#888',
   }))
 
-  const suggested: AllocationItem[] = getAllocation(valamLevel)
+  const suggested: AllocationItem[] = getAllocationByRisk(valamLevel, risk)
 
   // ── Gap analysis ──────────────────────────────────────────────────────
   // Compute actual % by suggested label (using TYPE_TO_SUGGESTED mapping)
@@ -189,25 +178,7 @@ export default function AllocationPage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 40 }}>
       <style>{CSS}</style>
 
-      {/* Navbar */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 30, background: 'var(--surface)',
-        borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center',
-        gap: 10, padding: '0 20px', height: 52 }}>
-        <button onClick={() => router.push('/dashboard')}
-          style={{ background: 'none', border: 'none', color: 'var(--muted)',
-            fontSize: 20, cursor: 'pointer', lineHeight: 1, padding: '2px 4px' }}>
-          ←
-        </button>
-        <span style={{ fontFamily: 'Playfair Display,serif', fontSize: 16,
-          fontWeight: 700, color: 'var(--gold)', flex: 1 }}>
-          Asset Allocation
-        </span>
-        <button onClick={toggleDark}
-          style={{ background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 16, color: 'var(--muted)' }}>
-          {dark ? '☀' : '◑'}
-        </button>
-      </div>
+      <DNavbar activeTab="Allocation" />
 
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '24px 16px' }}>
         {error && (
@@ -242,6 +213,54 @@ export default function AllocationPage() {
           </div>
         ) : (
           <>
+            {/* ── Risk Profile Card ──────────────────────────────────────── */}
+            <div style={{
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 12, padding: '18px 20px', marginBottom: 16,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.6px',
+                    textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 4 }}>
+                    Risk Profile
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text-sm)', lineHeight: 1.5 }}>
+                    {risk === 'low'    && 'Conservative — prioritises capital preservation with safer instruments.'}
+                    {risk === 'medium' && 'Balanced — standard allocation for your wealth level.'}
+                    {risk === 'high'   && 'Aggressive — maximises growth potential with higher equity exposure.'}
+                  </div>
+                </div>
+
+                <select
+                  value={risk}
+                  onChange={e => setRisk(e.target.value as RiskLevel)}
+                  style={{
+                    background: 'var(--surface2)', border: '1px solid var(--border-md)',
+                    borderRadius: 8, padding: '8px 14px', fontSize: 13,
+                    color: 'var(--text)', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+                    minWidth: 200, outline: 'none',
+                  }}
+                >
+                  <option value="low">🛡️ Low — Conservative investing</option>
+                  <option value="medium">⚖️ Medium — Balanced investing</option>
+                  <option value="high">🚀 High — Aggressive investing</option>
+                </select>
+              </div>
+
+              {/* Risk impact hint strip */}
+              <div style={{
+                marginTop: 12, paddingTop: 12,
+                borderTop: '1px solid var(--border)',
+                display: 'flex', gap: 20, flexWrap: 'wrap',
+              }}>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                  {risk === 'low'    && '↑ Safe instruments  ·  ↓ Equity exposure  ·  Gap analysis adjusted'}
+                  {risk === 'medium' && '  Baseline allocation for Level ' + valamLevel + ' investors'}
+                  {risk === 'high'   && '↑ Equity exposure  ·  ↓ Safe instruments  ·  Gap analysis adjusted'}
+                </span>
+              </div>
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
               {/* Actual donut */}
               <div style={{ background: 'var(--surface)', borderRadius: 18,
@@ -262,7 +281,7 @@ export default function AllocationPage() {
                 border: '1px solid var(--border)', padding: '20px 16px' }}>
                 <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
                   textTransform: 'uppercase', fontWeight: 500, marginBottom: 16 }}>
-                  Suggested · Level {valamLevel}
+                  Suggested · Level {valamLevel} · {risk.charAt(0).toUpperCase() + risk.slice(1)} Risk
                 </div>
                 <Donut slices={suggested} label="Target" total="Ideal mix" />
               </div>

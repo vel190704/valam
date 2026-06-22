@@ -10,6 +10,7 @@ import { determineNextTask } from "./lib/roadmapEngine.js";
 import { generateCoachingExplanation } from "./lib/aiCoach.js";
 import { getCachedRoadmap, setCachedRoadmap } from "./lib/roadmapCache.js";
 import { getFinancialYearStart } from "./lib/financialYear.js";
+import { Resend } from "resend";
 
 dotenv.config();
 dotenv.config({ path: ".env.local" });           // loads GROQ_API_KEY from backend/.env.local
@@ -48,7 +49,8 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
 });
 
 // Groq client — initialized once at startup, shared across all /roadmap requests
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const groq   = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const VALID_GOALS = [
@@ -1023,6 +1025,32 @@ app.post("/learning/progress", requireUser, async (req, res) => {
     return res.status(500).json({ error: "Failed to update progress" });
   }
 });
+
+// ── Contact form ──────────────────────────────────────────────────────────────
+app.post('/contact', async (req, res) => {
+  try {
+    if (!resend) {
+      return res.status(503).json({ error: 'Email not configured' })
+    }
+    const { name, email, message } = req.body
+    await resend.emails.send({
+      from:    'VALAM <onboarding@resend.dev>',
+      to:      'valamhq@gmail.com',
+      subject: `Contact Form from ${name}`,
+      html: `
+        <h2>VALAM Contact Form</h2>
+        <p><b>Name:</b> ${name}</p>
+        <p><b>Email:</b> ${email}</p>
+        <p><b>Message:</b></p>
+        <p>${message}</p>
+      `
+    })
+    res.json({ success: true })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to send email' })
+  }
+})
 
 // ── Start server ──────────────────────────────────────────────────────────────
 const PORT = process.env.PORT ?? 5000;

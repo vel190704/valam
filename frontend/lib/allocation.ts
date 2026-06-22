@@ -24,6 +24,37 @@ export function getAllocation(level: number) {
   ]
 }
 
+export type RiskLevel = 'low' | 'medium' | 'high'
+
+export function getAllocationByRisk(level: number, risk: RiskLevel) {
+  const base = getAllocation(level)
+  if (risk === 'medium') return base
+
+  const aggressive = ['Stocks', 'International', 'Alternatives', 'Crypto', 'ETFs']
+  const defensive  = ['Emergency Fund', 'FDs', 'Bonds', 'Gold', 'Mutual Funds']
+
+  const shifted = base.map(item => {
+    const { label } = item
+    if (risk === 'high') {
+      if (aggressive.includes(label)) return { ...item, pct: Math.min(80, item.pct + 10) }
+      if (defensive.includes(label))  return { ...item, pct: Math.max(5,  item.pct - 10) }
+    }
+    if (risk === 'low') {
+      if (aggressive.includes(label)) return { ...item, pct: Math.max(5,  item.pct - 10) }
+      if (defensive.includes(label))  return { ...item, pct: Math.min(80, item.pct + 10) }
+    }
+    return item
+  })
+
+  const sum = shifted.reduce((s, x) => s + x.pct, 0)
+  const exact = shifted.map(item => (item.pct / sum) * 100)
+  const floors = exact.map(Math.floor)
+  const remainder = 100 - floors.reduce((s, v) => s + v, 0)
+  const fracs = exact.map((v, i) => ({ i, f: v - floors[i] })).sort((a, b) => b.f - a.f)
+  for (let k = 0; k < remainder; k++) floors[fracs[k].i]++
+  return shifted.map((item, i) => ({ ...item, pct: floors[i] }))
+}
+
 // Maps actual investment type keys → suggested allocation label
 export const TYPE_TO_SUGGESTED: Record<string, string> = {
   mf:    'Mutual Funds',

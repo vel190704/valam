@@ -6,30 +6,50 @@ import { supabase } from '@/lib/supabase'
 
 export default function ProfilePage() {
   const router = useRouter()
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading]       = useState(true)
+  const [joinedMonth, setJoinedMonth] = useState('')
+  const [onboarded, setOnboarded]   = useState(false)
   const [user, setUser] = useState<{
     email: string
     name: string
-    age: number
+    age: number | null
   } | null>(null)
+
   useEffect(() => {
     async function getUser() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
+      const { data: { session } } = await supabase.auth.getSession()
 
       if (!session) {
         router.replace('/login')
         return
       }
-      setUser({
-        email: session.user.email || '',
-        name: session.user.user_metadata.name || '',
-        age: session.user.user_metadata.age || 0,
-      })
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .maybeSingle()
+
+      if (profile) {
+        setOnboarded(true)
+        const joined = new Date(profile.created_at)
+          .toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+        setJoinedMonth(joined)
+        setUser({
+          email: session.user.email || '',
+          name:  profile.name || session.user.user_metadata.name || '',
+          age:   profile.age ?? null,
+        })
+      } else {
+        setUser({
+          email: session.user.email || '',
+          name:  session.user.user_metadata.name || '',
+          age:   null,
+        })
+      }
       setLoading(false)
     }
-    getUser()
+    void getUser()
   }, [router])
 
   const handleLogout = async () => {
@@ -88,7 +108,7 @@ export default function ProfilePage() {
             {user?.name}
           </h1>
           <p className="text-[#f5f0e8]/60 mt-1">
-            Investor at VALAM {/*Later needs to be changed as growing valam since (date signed up in the site)*/}
+            {onboarded && joinedMonth ? `VALAM member since ${joinedMonth}` : 'Investor at VALAM'}
           </p>
         </div>
 
@@ -127,7 +147,7 @@ export default function ProfilePage() {
               Age
             </p>
             <p className="text-[#f5f0e8] text-lg mt-1">
-              {user?.age}
+              {user?.age ?? '—'}
             </p>
           </div>
         </div>

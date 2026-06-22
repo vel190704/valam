@@ -10,9 +10,6 @@ import {
   type SavingsKey,
   type InvestmentsKey,
   type ExperienceKey,
-  type EmergencyFundKey,
-  type HighInterestDebtKey,
-  type HealthInsuranceKey,
 } from '@/lib/valam'
 import { supabase } from '@/lib/supabase'
 
@@ -36,19 +33,12 @@ export default function ResultPage() {
       const savingsRate    = sessionStorage.getItem('valam_savings') ?? '<2'
       const investments    = sessionStorage.getItem('valam_investments') ?? '<10k'
       const goal           = sessionStorage.getItem('valam_goal') ?? 'wealth'
-      const emergencyFund    = sessionStorage.getItem('valam_emergency_fund')    as EmergencyFundKey | null
-      const highInterestDebt = sessionStorage.getItem('valam_high_interest_debt') as HighInterestDebtKey | null
-      const healthInsurance  = sessionStorage.getItem('valam_health_insurance')   as HealthInsuranceKey | null
-
       const calculated = calculateVALAM({
         age,
-        income:           income as IncomeKey,
-        savingsRate:      savingsRate as SavingsKey,
-        investments:      investments as InvestmentsKey,
-        experience:       experience as ExperienceKey,
-        emergencyFund,
-        highInterestDebt,
-        healthInsurance,
+        income:      income as IncomeKey,
+        savingsRate: savingsRate as SavingsKey,
+        investments: investments as InvestmentsKey,
+        experience:  experience as ExperienceKey,
       })
       setResult(calculated)
       setLoading(false)
@@ -76,9 +66,6 @@ export default function ResultPage() {
             investments,
             experience,
             goal,
-            emergencyFund,
-            highInterestDebt,
-            healthInsurance,
             valamScore:         calculated.positionScore,
             valamLevel:         calculated.positionLevel,
             valamLevelName:     calculated.positionLevelName,
@@ -87,12 +74,11 @@ export default function ResultPage() {
             potentialLevelName: calculated.potentialLevelName,
             wealthVelocity:     calculated.breakdown.wealthVelocity,
             breakdown: {
-              savingsScore:         calculated.breakdown.savingsScore,
-              investmentsScore:     calculated.breakdown.wealthVelocityScore,
-              incomeScore:          calculated.breakdown.incomeScore,
-              experienceScore:      calculated.breakdown.experienceScore,
-              ageScore:             calculated.breakdown.ageScore,
-              financialHealthScore: calculated.breakdown.financialHealthScore,
+              savingsScore:     calculated.breakdown.savingsScore,
+              investmentsScore: calculated.breakdown.wealthVelocityScore,
+              incomeScore:      calculated.breakdown.incomeScore,
+              experienceScore:  calculated.breakdown.experienceScore,
+              ageScore:         calculated.breakdown.ageScore,
             },
           }),
         })

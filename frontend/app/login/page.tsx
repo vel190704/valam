@@ -52,8 +52,8 @@ export default function LoginPage() {
     if (!emailRegex.test(email))
       return setError("Enter a valid email");
 
-    if (password.length < 8)
-      return setError("Password should contain atleast 8 characters");
+    if (password.length < 6)
+      return setError("Password should contain atleast 6 characters");
 
     try {
       setLoading(true);
@@ -99,6 +99,26 @@ export default function LoginPage() {
 
         if (insertError) {
           console.log(insertError);
+        }
+      }
+      const pending = localStorage.getItem("pendingAssessment");
+      if (pending) {
+        try {
+          const assessment = JSON.parse(pending);
+          const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:5000";
+          const res = await fetch(`${BASE}/profile/save-assessment`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${data.session.access_token}`
+            },
+            body: JSON.stringify(assessment),
+          });
+          if (res.ok) {
+            localStorage.removeItem("pendingAssessment");
+          }
+        } catch (err) {
+          console.error("Failed to save guest assessment", err);
         }
       }
       router.push("/");

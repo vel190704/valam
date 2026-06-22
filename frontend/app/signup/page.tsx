@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import type { VALAMResult } from '@/lib/valam'
 
 // ── Read pending assessment from sessionStorage ───────────────────────────────
-// If the user completed onboarding as a guest, bundle their full assessment
+// If the user completed onboarding as a guest, bundle their full assessment  
 // into the signup call so it's saved immediately on account creation.
 interface AssessmentPayload {
   name: string
@@ -30,7 +30,6 @@ interface AssessmentPayload {
     ageScore: number
   }
 }
-
 function getPendingAssessment(
   nameOverride: string,
   ageOverride: number
@@ -80,7 +79,7 @@ function getPendingAssessment(
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function SignupPage() {
   const router = useRouter()
-
+  
   const [name,                 setName]                 = useState('')
   const [age,                  setAge]                  = useState('')
   const [email,                setEmail]                = useState('')
@@ -89,12 +88,17 @@ export default function SignupPage() {
   const [error,                setError]                = useState('')
   const [hasPendingAssessment, setHasPendingAssessment] = useState(false)
 
-  // Pre-fill from sessionStorage — runs only on the client (no SSR crash)
+  // Pre-fill from sessionStorage and redirect if already logged in
   useEffect(() => {
-    setName(sessionStorage.getItem('valam_name') ?? '')
-    setAge(sessionStorage.getItem('valam_age') ?? '')
-    setHasPendingAssessment(!!sessionStorage.getItem('valam_result'))
-  }, [])
+    async function init() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) { router.push('/'); return }
+      setName(sessionStorage.getItem('valam_name') ?? '')
+      setAge(sessionStorage.getItem('valam_age') ?? '')
+      setHasPendingAssessment(!!sessionStorage.getItem('valam_result'))
+    }
+    void init()
+  }, [router])
 
   // ── Email/password signup ──────────────────────────────────────────────────
   async function handleSignup() {
@@ -128,7 +132,7 @@ export default function SignupPage() {
     if (assessment && data.session?.access_token) {
       try {
         const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
-        await fetch(`${BASE}/profile/save-assessment`, {
+        const saveRes = await fetch(`${BASE}/profile/save-assessment`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -136,6 +140,10 @@ export default function SignupPage() {
           },
           body: JSON.stringify(assessment),
         })
+        if (!saveRes.ok) {
+          const body = await saveRes.text()
+          console.warn('Assessment save failed after signup:', saveRes.status, body)
+        }
       } catch {
         console.warn('Assessment save failed after signup')
       }

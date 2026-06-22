@@ -3,28 +3,31 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { usePathname } from 'next/navigation'
 
 export default function Navbar() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [hiddenPage, setHiddenPage] = useState(false)
+  const pathname = usePathname()
+
+  const appPages = [
+    '/dashboard',
+    '/portfolio',
+    '/networth',
+    '/income',
+    '/result',
+    '/onboarding',
+    '/auth',
+    '/learning',
+    '/milestones',
+    '/allocation',
+  ]
+
+  const hiddenPage = appPages.some(
+    p => pathname.startsWith(p)
+  )
 
   useEffect(() => {
-    // Hide global navbar on app pages that have their own nav
-    const appPages = ['/dashboard', '/portfolio', '/networth',
-      '/income', '/result', '/onboarding', '/auth', '/profile']
-    const isAppPage = appPages.some(p =>
-      window.location.pathname.startsWith(p)
-    )
-    setHiddenPage(isAppPage)
-
-    const handlePopState = () => {
-      const isApp = appPages.some(p =>
-        window.location.pathname.startsWith(p)
-      )
-      setHiddenPage(isApp)
-    }
-    window.addEventListener('popstate', handlePopState)
 
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -40,7 +43,6 @@ export default function Navbar() {
 
     return () => {
       subscription.unsubscribe()
-      window.removeEventListener('popstate', handlePopState)
     }
   }, [])
 
@@ -91,7 +93,7 @@ export default function Navbar() {
         <div className="hidden md:block">
           {userEmail ? (
             <Link
-              href="/dashboard"
+              href="/profile"
               className="flex h-10 w-10 items-center justify-center rounded-full bg-[#B8924A] font-serif text-base font-bold text-white shadow-lg shadow-[#B8924A]/20"
               aria-label="Go to dashboard">
               {userEmail.charAt(0).toUpperCase()}

@@ -9,6 +9,9 @@ import { Session } from "@supabase/supabase-js";
 export default function HomePage() {
   const router = useRouter()
   const [session, setSession] = useState<Session | null>(null);
+  const [isonboarded, setIsonboarded] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [navigating, setNavigating] = useState(false);
   useEffect(() => {
     const getSession = async () => {
       const { data } = await supabase.auth.getSession()
@@ -25,17 +28,18 @@ export default function HomePage() {
 
   useEffect(() => {
     async function checkExistingProfile() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) return
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.user) return
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', session.user.id)
-        .maybeSingle()
-
-      if (profile) {
-        router.push('/dashboard')
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('onboarded')
+          .eq('user_id', session.user.id)
+          .maybeSingle()
+        setIsonboarded(profile?.onboarded === true)
+      } finally {
+        setChecking(false)
       }
     }
     void checkExistingProfile()
@@ -55,81 +59,6 @@ export default function HomePage() {
     textAlign: 'center'
   }}
 >
-
-     <div
-  style={{
-    position: 'absolute',
-    top: '20px',
-    right: '20px',
-    display: 'flex',
-    gap: '10px',
-    zIndex: 10
-  }}
->
-  {
-session ?
-(
-<button
-onClick={() => router.push('/profile')}
-style={{
-width:'42px',
-height:'42px',
-borderRadius:'50%',
-border:'none',
-background:'#c9a84c',
-color:'#1a0f0a',
-fontWeight:700,
-fontSize:'1rem',
-fontFamily:'serif',
-cursor:'pointer'
-}}
->
-{
-session.user.email
-?.charAt(0)
-.toUpperCase()
-}
-</button>
-)
-:
-(
-<>
-<button
-onClick={() => router.push('/login')}
-style={{
-padding:'10px 20px',
-background:'transparent',
-border:'1px solid rgba(201,168,76,0.5)',
-borderRadius:'999px',
-color:'#f5f0e8',
-cursor:'pointer',
-fontWeight:600,
-fontSize:'0.95rem'
-}}
->
-Login
-</button>
-
-<button
-onClick={() => router.push('/signup')}
-style={{
-padding:'10px 20px',
-background:'linear-gradient(135deg,#f0d080 0%,#c9a84c 40%,#a07828 100%)',
-border:'none',
-borderRadius:'999px',
-color:'#2a1a0e',
-cursor:'pointer',
-fontWeight:700,
-fontSize:'0.95rem',
-boxShadow:'0 4px 16px rgba(201,168,76,0.25)'
-}}
->
-Sign Up
-</button>
-</>
-)
-}
-</div>   
 
       <div style={{ fontFamily: "'Playfair Display', serif",
         fontSize: '2rem', color: '#c9a84c', fontWeight: 700,
@@ -185,14 +114,32 @@ Sign Up
       </div>
 
       <button
-         onClick={() => router.push('/onboarding/step1')}
+        disabled={checking || navigating}
+        onClick={async () => {
+          setNavigating(true)
+          try {
+            const { data: { session: liveSession } } = await supabase.auth.getSession()
+            if (!liveSession?.user) { router.push('/onboarding/step1'); return }
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('onboarded')
+              .eq('user_id', liveSession.user.id)
+              .maybeSingle()
+            router.push(profile?.onboarded ? '/dashboard' : '/onboarding/step1')
+          } finally {
+            setNavigating(false)
+          }
+        }}
         style={{ padding: '18px 56px',
           background: 'linear-gradient(135deg, #f0d080 0%, #c9a84c 40%, #a07828 100%)',
-          border: 'none', borderRadius: '50px', cursor: 'pointer',
+          border: 'none', borderRadius: '50px',
+          cursor: (checking || navigating) ? 'default' : 'pointer',
+          opacity: (checking || navigating) ? 0.6 : 1,
           fontFamily: 'Inter, sans-serif', fontWeight: 700,
           fontSize: '1.1rem', color: '#2a1a0e',
-          boxShadow: '0 4px 24px rgba(201,168,76,0.3)' }}>
-        Get Started →
+          boxShadow: '0 4px 24px rgba(201,168,76,0.3)',
+          transition: 'opacity 0.2s' }}>
+        {(checking || navigating) ? '…' : session && isonboarded ? 'Go to Dashboard →' : 'Get Started →'}
       </button>
 
       <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.8rem',

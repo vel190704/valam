@@ -28,7 +28,6 @@ export default function Navbar() {
   )
 
   useEffect(() => {
-
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUserEmail(session?.user?.email ?? null)

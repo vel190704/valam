@@ -5,17 +5,29 @@ import { supabase } from '@/lib/supabase'
 import DNavbar from '@/components/layout/dnavbar'
 
 // ── Types ──────────────────────────────────────────────────────────────────
-type InvestmentType = 'mf' | 'stock' | 'fd' | 'crypto' | 'bond' | 'etf' | 'realestate'
-
+type InvestmentType = 'mf' | 'stock' | 'fd' | 'crypto' | 'bond' | 'etf'
+type MutualFundType =
+  | 'largecap'
+  | 'midcap'
+  | 'smallcap'
+  | 'nifty50'
+  | 'flexicap'
+  | 'international'
+  | 'debt'
+  | 'commodity'
 interface Investment {
   id: string
   date?: string
+
   type: InvestmentType
+
+  mfType?: MutualFundType
+
   amount: number
+
   note?: string
 }
 
-// ── Constants ──────────────────────────────────────────────────────────────
 const TYPE_META: Record<InvestmentType, { label: string; color: string; emoji: string }> = {
   mf:         { label: 'Mutual Fund',   color: '#B8924A', emoji: '📈' },
   stock:      { label: 'Stock',         color: '#5B8DB8', emoji: '📊' },
@@ -23,10 +35,60 @@ const TYPE_META: Record<InvestmentType, { label: string; color: string; emoji: s
   crypto:     { label: 'Crypto',        color: '#9B59B6', emoji: '₿'  },
   bond:       { label: 'Bond',          color: '#27AE60', emoji: '📜' },
   etf:        { label: 'ETF',           color: '#16A085', emoji: '🔷' },
-  realestate: { label: 'Real Estate',   color: '#C0392B', emoji: '🏠' },
+}
+
+const MF_META: Record<
+  MutualFundType,
+  {
+    label: string
+    emoji: string
+  }
+> = {
+
+  largecap: {
+    label: 'Large Cap',
+    emoji: '🏢'
+  },
+
+  midcap: {
+    label: 'Mid Cap',
+    emoji: '📈'
+  },
+
+  smallcap: {
+    label: 'Small Cap',
+    emoji: '🚀'
+  },
+
+  nifty50: {
+    label: 'Nifty 50',
+    emoji: '🇮🇳'
+  },
+
+  flexicap: {
+    label: 'Flexi Cap',
+    emoji: '🔄'
+  },
+
+  international: {
+    label: 'International',
+    emoji: '🌎'
+  },
+
+  debt: {
+    label: 'Debt Fund',
+    emoji: '🛡️'
+  },
+
+  commodity: {
+    label: 'Commodity',
+    emoji: '🥇'
+  }
+
 }
 
 const TYPES = Object.keys(TYPE_META) as InvestmentType[]
+const MF_TYPES =Object.keys(MF_META) as MutualFundType[]
 
 const CSS = `
   :root {
@@ -283,6 +345,337 @@ function DonutChart({ investments }: { investments: Investment[] }) {
   )
 }
 
+function MFDonutChart({
+  investments,
+}: {
+  investments: Investment[]
+}) {
+
+  const mfInvestments = investments.filter(
+    inv =>
+      inv.type === 'mf' &&
+      inv.mfType
+  )
+
+  const totals: Partial<
+    Record<MutualFundType, number>
+  > = {}
+
+  mfInvestments.forEach(inv => {
+
+    const type = inv.mfType!
+
+    totals[type] =
+      (totals[type] ?? 0)
+      +
+      inv.amount
+
+  })
+
+  const grand =
+    Object
+      .values(totals)
+      .reduce(
+        (a,b)=>a+b,
+        0
+      )
+    || 1
+
+  const slices =
+    Object.entries(totals)
+      .sort(
+        (a,b)=>
+          b[1]-a[1]
+      ) as
+      [MutualFundType,number][]
+
+  const circumference =
+    2*Math.PI*52
+
+  let offset = 0
+
+  return (
+
+    <div
+      style={{
+        display:'flex',
+        alignItems:'center',
+        gap:32,
+        flexWrap:'wrap'
+      }}
+    >
+
+      {/* DONUT */}
+
+      <div
+        style={{
+          position:'relative',
+          width:140,
+          height:140,
+          flexShrink:0
+        }}
+      >
+
+        <svg
+          viewBox="0 0 130 130"
+          width="140"
+          height="140"
+        >
+
+          <circle
+            cx="65"
+            cy="65"
+            r="52"
+            fill="none"
+            stroke="var(--surface2)"
+            strokeWidth="22"
+          />
+
+          {
+
+            slices.map(
+              ([type,amt],i)=>{
+
+                const pct =
+                  amt/grand
+
+                const dash =
+                  pct*circumference
+
+                const startOffset =
+                  offset
+
+                offset += dash
+
+                const rotate =
+                  -90 +
+                  (
+                    startOffset
+                    /
+                    circumference
+                  )
+                  *360
+
+                  const MF_COLORS: Record<MutualFundType,string> = {
+  largecap:'#B8924A',
+  midcap:'#D4AD72',
+  smallcap:'#F0D080',
+  nifty50:'#5B8DB8',
+  flexicap:'#9B59B6',
+  international:'#16A085',
+  debt:'#27AE60',
+  commodity:'#E07B54'
+}
+
+                return(
+
+                  <circle
+                    key={i}
+                    cx="65"
+                    cy="65"
+                    r="52"
+                    fill="none"
+                    stroke={MF_COLORS[type]}
+                    strokeWidth="22"
+                    strokeDasharray={`${dash} ${circumference-dash}`}
+                    transform={`rotate(${rotate} 65 65)`}
+                  />
+
+                )
+
+              }
+
+            )
+
+          }
+
+        </svg>
+
+        <div
+          style={{
+            position:'absolute',
+            top:'50%',
+            left:'50%',
+            transform:'translate(-50%,-50%)',
+            textAlign:'center'
+          }}
+        >
+
+          <div
+            style={{
+              fontFamily:'Playfair Display,serif',
+              fontSize:13,
+              color:'var(--text)',
+              fontWeight:500
+            }}
+          >
+
+            {slices.length}
+
+          </div>
+
+          <div
+            style={{
+              fontSize:9,
+              color:'var(--muted)'
+            }}
+          >
+
+            MF Types
+
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* LEGEND */}
+
+      <div
+        style={{
+          flex:1,
+          minWidth:200,
+          display:'flex',
+          flexDirection:'column',
+          gap:10
+        }}
+      >
+
+        {
+
+          slices.map(
+            ([type,amt])=>{
+
+              const pct =
+                Math.round(
+                  amt/grand*100
+                )
+
+                const MF_COLORS: Record<MutualFundType,string> = {
+  largecap:'#B8924A',
+  midcap:'#D4AD72',
+  smallcap:'#F0D080',
+  nifty50:'#5B8DB8',
+  flexicap:'#9B59B6',
+  international:'#16A085',
+  debt:'#27AE60',
+  commodity:'#E07B54'
+}
+
+              return(
+
+                <div key={type}>
+
+                  <div
+                    style={{
+                      display:'flex',
+                      justifyContent:'space-between',
+                      alignItems:'center',
+                      marginBottom:4
+                    }}
+                  >
+
+                    <div
+                      style={{
+                        display:'flex',
+                        alignItems:'center',
+                        gap:7
+                      }}
+                    >
+
+                      <span>
+
+                        {MF_META[type].emoji}
+
+                      </span>
+
+                      <span
+                        style={{
+                          fontSize:12,
+                          color:'var(--text)',
+                          fontWeight:500
+                        }}
+                      >
+
+                        {MF_META[type].label}
+
+                      </span>
+
+                    </div>
+
+                    <div
+                      style={{
+                        display:'flex',
+                        gap:10,
+                        alignItems:'center'
+                      }}
+                    >
+
+                      <span
+                        style={{
+                          fontSize:12,
+                          color:'var(--muted)'
+                        }}
+                      >
+
+                        ₹{amt.toLocaleString()}
+
+                      </span>
+
+                      <span
+                        style={{
+                          color:
+                            MF_COLORS[type],
+                          fontWeight:700
+                        }}
+                      >
+
+                        {pct}%
+
+                      </span>
+
+                    </div>
+
+                  </div>
+
+                  <div
+                    style={{
+                      height:5,
+                      background:'var(--surface2)',
+                      borderRadius:4,
+                      overflow:'hidden'
+                    }}
+                  >
+
+                    <div
+                      style={{
+                        width:`${pct}%`,
+                        height:'100%',
+                        background:
+                          MF_COLORS[type]
+                      }}
+                    />
+
+                  </div>
+
+                </div>
+
+              )
+
+            }
+
+          )
+
+        }
+
+      </div>
+
+    </div>
+
+  )
+
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────
 export default function PortfolioPage() {
   const router = useRouter()
@@ -292,6 +685,7 @@ export default function PortfolioPage() {
 
   const [formDate, setFormDate]     = useState('')
   const [formType, setFormType]     = useState<InvestmentType>('mf')
+  const [  formMfType,  setFormMfType] =useState<MutualFundType>( 'largecap')
   const [formAmount, setFormAmount] = useState('')
   const [formNote, setFormNote]     = useState('')
   const [saving, setSaving]         = useState(false)
@@ -338,13 +732,18 @@ export default function PortfolioPage() {
         'Authorization': `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
-        date: formDate || undefined, type: formType,
+        date: formDate || undefined, type: formType,  mfType:
+    formType === 'mf'
+    ?
+    formMfType
+    :
+null,
         amount: amt, note: formNote || undefined,
       }),
     })
 
     if (res.ok) {
-      setFormDate(''); setFormAmount(''); setFormNote(''); setFormType('mf')
+      setFormDate(''); setFormAmount(''); setFormNote(''); setFormType('mf'); setFormMfType('largecap')
       await loadInvestments()
     } else {
       const j = await res.json() as { error?: string }
@@ -462,6 +861,128 @@ activeTab="Portfolio"
               </select>
             </div>
 
+            {
+
+formType === 'mf'
+
+&&
+
+(
+
+<div>
+
+<label
+
+style={{
+
+fontSize:10,
+
+color:
+
+'var(--muted)',
+
+fontWeight:500,
+
+display:'block',
+
+marginBottom:5
+
+}}
+
+>
+
+MF Category
+
+</label>
+
+<select
+
+value={formMfType}
+
+onChange={e=>setFormMfType(e.target.value as MutualFundType)}
+style={{
+
+width:'100%',
+
+background:
+
+'var(--surface2)',
+
+border:
+
+'1px solid var(--border-md)',
+
+borderRadius:
+
+10,
+
+padding:
+
+'10px 12px',
+
+fontSize:
+
+12,
+
+color:
+
+'var(--text)',
+
+appearance:
+
+'none'
+
+}}
+
+>
+
+{
+
+MF_TYPES.map(
+
+t => (
+
+<option
+
+key={t}
+
+value={t}
+
+>
+
+{
+
+MF_META[t]
+
+.emoji
+
+}
+
+{' '}
+
+{
+
+MF_META[t]
+
+.label
+
+}
+
+</option>
+
+)
+
+)
+
+}
+
+</select>
+
+</div>
+
+)
+}
+
             {/* Amount */}
             <div>
               <label style={{ fontSize: 10, color: 'var(--muted)',
@@ -566,11 +1087,36 @@ activeTab="Portfolio"
                       background:TYPE_META[inv.type as InvestmentType]?.color
                         ?? '#B8924A',
                       flexShrink:0 }}/>
-                    <span style={{ fontSize:13, color:'var(--text)',
-                      fontWeight:500 }}>
-                      {TYPE_META[inv.type as InvestmentType]?.emoji ?? ''}{' '}
-                      {TYPE_META[inv.type as InvestmentType]?.label ?? inv.type}
-                    </span>
+                    <span
+  style={{
+    fontSize: 13,
+    color: 'var(--text)',
+    fontWeight: 500,
+  }}
+>
+  {TYPE_META[inv.type as InvestmentType]?.emoji ?? ''}{' '}
+
+  {TYPE_META[inv.type as InvestmentType]?.label ?? inv.type}
+
+  {
+    inv.type === 'mf' &&
+    inv.mfType &&
+    (
+      <>
+        {' '}
+        •{' '}
+        <span
+          style={{
+            color: 'var(--gold)',
+            fontWeight: 600,
+          }}
+        >
+          {MF_META[inv.mfType].label}
+        </span>
+      </>
+    )
+  }
+</span>
                     {inv.note && (
                       <span style={{ fontSize:10, color:'var(--muted)',
                         background:'var(--surface2)',
@@ -651,10 +1197,38 @@ activeTab="Portfolio"
           let offset = 0
 
           return (
-            <div style={{ background:'var(--surface)',
-              borderRadius:18, padding:'20px 22px',
-              border:'1px solid var(--border)',
-              marginBottom:16 }}>
+            <div
+  onClick={() => router.push('/allocation')}
+  style={{
+    background:'var(--surface)',
+    borderRadius:18,
+    padding:'20px 22px',
+    border:'1px solid var(--border)',
+    marginBottom:16,
+
+    cursor:'pointer',
+
+    transition:'all .2s ease'
+  }}
+
+  onMouseEnter={e => {
+    e.currentTarget.style.transform =
+      'translateY(-2px)'
+
+    e.currentTarget.style.boxShadow =
+      '0 6px 20px rgba(0,0,0,.08)'
+  }}
+
+  onMouseLeave={e => {
+
+    e.currentTarget.style.transform =
+      'translateY(0)'
+
+    e.currentTarget.style.boxShadow =
+      'none'
+
+  }}
+>
 
               <div style={{ fontSize:10, color:'var(--muted)',
                 letterSpacing:'.45px', textTransform:'uppercase',
@@ -759,6 +1333,71 @@ activeTab="Portfolio"
             </div>
           )
         })()}
+
+{
+investments.some(
+  inv =>
+    inv.type === 'mf'
+    &&
+    inv.mfType
+)
+&&
+
+<div
+  onClick={() => router.push('/allocation')}
+  style={{
+    background:'var(--surface)',
+    borderRadius:18,
+    padding:'20px 22px',
+    border:'1px solid var(--border)',
+    marginBottom:16,
+
+    cursor:'pointer',
+
+    transition:'all .2s ease'
+  }}
+
+  onMouseEnter={e => {
+    e.currentTarget.style.transform =
+      'translateY(-2px)'
+
+    e.currentTarget.style.boxShadow =
+      '0 6px 20px rgba(0,0,0,.08)'
+  }}
+
+  onMouseLeave={e => {
+
+    e.currentTarget.style.transform =
+      'translateY(0)'
+
+    e.currentTarget.style.boxShadow =
+      'none'
+
+  }}
+>
+
+  <div
+    style={{
+      fontSize:10,
+      color:'var(--muted)',
+      letterSpacing:'.45px',
+      textTransform:'uppercase',
+      fontWeight:500,
+      marginBottom:16
+    }}
+  >
+
+    MUTUAL FUNDS BREAKDOWN
+
+  </div>
+
+  <MFDonutChart
+    investments={investments}
+  />
+
+</div>
+
+}     
 
         {/* SUMMARY CARDS */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',

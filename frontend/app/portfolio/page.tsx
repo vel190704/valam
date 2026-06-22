@@ -26,6 +26,8 @@ const TYPE_META: Record<InvestmentType, { label: string; color: string; emoji: s
 }
 
 const TYPES = Object.keys(TYPE_META) as InvestmentType[]
+// realestate excluded from new entries but kept in TYPE_META for displaying existing ones
+const FORM_TYPES = TYPES.filter(t => t !== 'realestate')
 
 const CSS = `
   :root {
@@ -479,7 +481,7 @@ export default function PortfolioPage() {
                   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237A6E5F'/%3E%3C/svg%3E")`,
                   backgroundRepeat: 'no-repeat',
                   backgroundPosition: 'right 12px center' }}>
-                {TYPES.map(t => (
+                {FORM_TYPES.map(t => (
                   <option key={t} value={t}>{TYPE_META[t].emoji} {TYPE_META[t].label}</option>
                 ))}
               </select>

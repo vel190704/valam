@@ -8,7 +8,7 @@ type InvestmentType = 'mf' | 'stock' | 'fd' | 'crypto' | 'bond' | 'etf' | 'reale
 
 interface Investment {
   id: string
-  date: string
+  date?: string
   type: InvestmentType
   amount: number
   note?: string
@@ -73,7 +73,7 @@ const CSS = `
 
 // ── Mini line chart ────────────────────────────────────────────────────────
 function MiniChart({ entries, color }: {
-  entries: { date: string; amount: number }[]
+  entries: { date?: string; amount: number }[]
   color: string
 }) {
   if (entries.length < 2) {
@@ -85,12 +85,13 @@ function MiniChart({ entries, color }: {
     )
   }
 
-  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date))
+  const today = new Date().toISOString().slice(0, 10)
+  const sorted = [...entries].sort((a, b) => (a.date ?? today).localeCompare(b.date ?? today))
   const cumulative: { date: string; total: number }[] = []
   let running = 0
   sorted.forEach(e => {
     running += e.amount
-    cumulative.push({ date: e.date, total: running })
+    cumulative.push({ date: e.date ?? today, total: running })
   })
 
   const W = 280, H = 80
@@ -136,13 +137,14 @@ function CombinedChart({ investments }: { investments: Investment[] }) {
 
   const W = 480, H = 150
   const types = [...new Set(investments.map(i => i.type))] as InvestmentType[]
-  const allDates = [...new Set(investments.map(i => i.date))].sort()
+  const today = new Date().toISOString().slice(0, 10)
+  const allDates = [...new Set(investments.map(i => i.date ?? today))].sort()
 
   const series = types.map(type => {
     const byType = investments.filter(i => i.type === type)
     const points = allDates.map(d => ({
       date: d,
-      total: byType.filter(i => i.date <= d).reduce((s, i) => s + i.amount, 0),
+      total: byType.filter(i => (i.date ?? today) <= d).reduce((s, i) => s + i.amount, 0),
     }))
     return { type, points, color: TYPE_META[type].color }
   })
@@ -319,7 +321,6 @@ export default function PortfolioPage() {
 
   async function handleAdd() {
     setFormError('')
-    if (!formDate) { setFormError('Please select a date'); return }
     const amt = parseFloat(formAmount)
     if (!formAmount || isNaN(amt) || amt <= 0) {
       setFormError('Enter a valid amount'); return
@@ -337,7 +338,7 @@ export default function PortfolioPage() {
         'Authorization': `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
-        date: formDate, type: formType,
+        date: formDate || undefined, type: formType,
         amount: amt, note: formNote || undefined,
       }),
     })
@@ -352,14 +353,27 @@ export default function PortfolioPage() {
     setSaving(false)
   }
 
+  function handleDuplicate(inv: Investment) {
+    setFormDate('')
+    setFormType(inv.type)
+    setFormAmount(String(inv.amount))
+    setFormNote(inv.note ?? '')
+  }
+
   async function handleDelete(id: string) {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
     const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
-    await fetch(`${BASE}/investments/${id}`, {
+    const res = await fetch(`${BASE}/investments/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${session.access_token}` },
     })
+    if (!res.ok) {
+      const body = await res.text()
+      console.error('Failed to delete investment:', res.status, body)
+      setFormError('Failed to delete investment. Please try again.')
+      return
+    }
     await loadInvestments()
   }
 
@@ -527,7 +541,7 @@ export default function PortfolioPage() {
 
             {/* Table header */}
             <div style={{ display:'grid',
-              gridTemplateColumns:'110px 1fr 130px 80px',
+              gridTemplateColumns:'110px 1fr 130px 130px',
               gap:12, padding:'6px 10px',
               background:'var(--surface2)',
               borderRadius:8, marginBottom:8 }}>
@@ -544,16 +558,16 @@ export default function PortfolioPage() {
               <div style={{ fontSize:10, color:'var(--muted)',
                 fontWeight:600, letterSpacing:'.4px',
                 textTransform:'uppercase',
-                textAlign:'center' }}>Action</div>
+                textAlign:'center' }}>Actions</div>
             </div>
 
             {/* Table rows */}
             {[...investments]
-              .sort((a, b) => b.date.localeCompare(a.date))
+              .sort((a, b) => (b.date ?? '9999').localeCompare(a.date ?? '9999'))
               .map((inv, i) => (
                 <div key={inv.id}
                   style={{ display:'grid',
-                    gridTemplateColumns:'110px 1fr 130px 80px',
+                    gridTemplateColumns:'110px 1fr 130px 130px',
                     gap:12, padding:'10px 10px',
                     borderBottom: i < investments.length - 1
                       ? '1px solid rgba(180,155,110,0.08)'
@@ -562,10 +576,11 @@ export default function PortfolioPage() {
 
                   {/* Date */}
                   <div style={{ fontSize:12, color:'var(--muted)' }}>
-                    {new Date(inv.date + 'T00:00:00')
-                      .toLocaleDateString('en-IN', {
-                        day:'numeric', month:'short', year:'numeric'
-                      })}
+                    {inv.date
+                      ? new Date(inv.date + 'T00:00:00').toLocaleDateString('en-IN', {
+                          day:'numeric', month:'short', year:'numeric'
+                        })
+                      : '—'}
                   </div>
 
                   {/* Type */}
@@ -600,16 +615,25 @@ export default function PortfolioPage() {
                     {fmtAmt(inv.amount)}
                   </div>
 
-                  {/* Delete */}
-                  <div style={{ textAlign:'center' }}>
+                  {/* Actions */}
+                  <div style={{ display:'flex', gap:6, justifyContent:'center' }}>
+                    <button
+                      onClick={() => handleDuplicate(inv)}
+                      style={{ background:'none',
+                        border:'1px solid rgba(184,146,74,0.35)',
+                        borderRadius:8, padding:'3px 10px',
+                        fontSize:11, color:'var(--gold)',
+                        cursor:'pointer' }}>
+                      Dup
+                    </button>
                     <button
                       onClick={() => handleDelete(inv.id)}
                       style={{ background:'none',
                         border:'1px solid rgba(192,57,43,0.25)',
-                        borderRadius:8, padding:'3px 12px',
+                        borderRadius:8, padding:'3px 10px',
                         fontSize:11, color:'var(--red)',
                         cursor:'pointer' }}>
-                      Delete
+                      Del
                     </button>
                   </div>
                 </div>
@@ -617,7 +641,7 @@ export default function PortfolioPage() {
 
             {/* Table footer: total */}
             <div style={{ display:'grid',
-              gridTemplateColumns:'110px 1fr 130px 80px',
+              gridTemplateColumns:'110px 1fr 130px 130px',
               gap:12, padding:'10px 10px',
               marginTop:4,
               borderTop:'1px solid var(--border)',
@@ -883,7 +907,7 @@ export default function PortfolioPage() {
                       />
                       <div style={{ marginTop: 12 }}>
                         {[...entries]
-                          .sort((a, b) => b.date.localeCompare(a.date))
+                          .sort((a, b) => (b.date ?? '9999').localeCompare(a.date ?? '9999'))
                           .map(entry => (
                           <div key={entry.id}
                             style={{ display: 'flex', alignItems: 'center',
@@ -894,17 +918,27 @@ export default function PortfolioPage() {
                                 {fmtAmt(entry.amount)}
                               </div>
                               <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
-                                {fmtDate(entry.date)}{entry.note && ` · ${entry.note}`}
+                                {entry.date ? fmtDate(entry.date) : '—'}{entry.note && ` · ${entry.note}`}
                               </div>
                             </div>
-                            <button
-                              onClick={e => { e.stopPropagation(); void handleDelete(entry.id) }}
-                              style={{ background: 'none',
-                                border: '1px solid rgba(192,57,43,0.25)',
-                                borderRadius: 8, padding: '3px 8px',
-                                fontSize: 10, color: 'var(--red)', cursor: 'pointer' }}>
-                              Delete
-                            </button>
+                            <div style={{ display:'flex', gap:5 }}>
+                              <button
+                                onClick={e => { e.stopPropagation(); handleDuplicate(entry) }}
+                                style={{ background: 'none',
+                                  border: '1px solid rgba(184,146,74,0.35)',
+                                  borderRadius: 8, padding: '3px 8px',
+                                  fontSize: 10, color: 'var(--gold)', cursor: 'pointer' }}>
+                                Dup
+                              </button>
+                              <button
+                                onClick={e => { e.stopPropagation(); void handleDelete(entry.id) }}
+                                style={{ background: 'none',
+                                  border: '1px solid rgba(192,57,43,0.25)',
+                                  borderRadius: 8, padding: '3px 8px',
+                                  fontSize: 10, color: 'var(--red)', cursor: 'pointer' }}>
+                                Del
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>

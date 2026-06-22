@@ -2,8 +2,15 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import Groq from "groq-sdk";
+import { calculateLiveSavingsRate, calculateMonthlySavingsRate } from "./lib/savingsRate.js";
+import { checkAndUnlockMilestones } from "./lib/milestoneEngine.js";
+import { determineNextTask } from "./lib/roadmapEngine.js";
+import { generateCoachingExplanation } from "./lib/aiCoach.js";
+import { getCachedRoadmap, setCachedRoadmap } from "./lib/roadmapCache.js";
 
 dotenv.config();
+dotenv.config({ path: ".env.local" });           // loads GROQ_API_KEY from backend/.env.local
 dotenv.config({ path: "../frontend/.env.local" });
 
 const app = express();
@@ -37,6 +44,9 @@ const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
+
+// Groq client — initialized once at startup, shared across all /roadmap requests
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const VALID_GOALS = [
@@ -299,11 +309,16 @@ app.get("/profile", requireUser, async (req, res) => {
       .order("date", { ascending: false }),
   ]);
 
+  const liveSavingsRate     = await calculateLiveSavingsRate(supabaseAdmin, req.user.id);
+  const monthlySavingsRate  = await calculateMonthlySavingsRate(supabaseAdmin, req.user.id);
+
   return res.json({
-    profile:       mapProfile(profile),
-    investments:   invResult.data  ?? [],
-    networthItems: nwResult.data   ?? [],
-    incomeEntries: incResult.data  ?? [],
+    profile:        mapProfile(profile),
+    investments:    invResult.data  ?? [],
+    networthItems:  nwResult.data   ?? [],
+    incomeEntries:  incResult.data  ?? [],
+    liveSavingsRate,
+    monthlySavingsRate,
   });
 });
 
@@ -392,8 +407,8 @@ app.get("/investments", requireUser, async (req, res) => {
 app.post("/investments", requireUser, async (req, res) => {
   const { date, type, amount, note } = req.body;
 
-  if (!date || !type || amount == null) {
-    return res.status(400).json({ error: "Missing required fields: date, type, amount" });
+  if (!type || amount == null) {
+    return res.status(400).json({ error: "Missing required fields: type, amount" });
   }
 
   if (!VALID_INVESTMENT_TYPES.includes(type)) {
@@ -406,7 +421,7 @@ app.post("/investments", requireUser, async (req, res) => {
     .from("investments")
     .insert({
       user_id: req.user.id,
-      date,
+      date: date ?? null,
       type,
       amount: Number(amount),
       note: note ?? null,
@@ -415,6 +430,12 @@ app.post("/investments", requireUser, async (req, res) => {
     .single();
 
   if (error) return res.status(500).json({ error: error.message });
+
+  // Fire-and-forget milestone checks (investment affects investment, savings rate, and net worth)
+  void checkAndUnlockMilestones(supabaseAdmin, req.user.id, 'investment');
+  void checkAndUnlockMilestones(supabaseAdmin, req.user.id, 'savings');
+  void checkAndUnlockMilestones(supabaseAdmin, req.user.id, 'networth');
+
   return res.status(201).json({ investment: data });
 });
 
@@ -469,6 +490,10 @@ app.post("/networth", requireUser, async (req, res) => {
     .single();
 
   if (error) return res.status(500).json({ error: error.message });
+
+  // Fire-and-forget milestone check
+  void checkAndUnlockMilestones(supabaseAdmin, req.user.id, 'networth');
+
   return res.status(201).json({ item: data });
 });
 
@@ -498,17 +523,17 @@ app.get("/income", requireUser, async (req, res) => {
 });
 
 app.post("/income", requireUser, async (req, res) => {
-  const { date, source, category, amount, note } = req.body;
+  const { date, source, amount, note } = req.body;
 
-  if (!date || !source || !category || amount == null) {
+  if (!date || !source || amount == null) {
     return res.status(400).json({
-      error: "Missing required fields: date, source, category, amount"
+      error: "Missing required fields: date, source, amount"
     });
   }
 
-  if (!VALID_INCOME_CATEGORIES.includes(category)) {
+  if (!VALID_INCOME_CATEGORIES.includes(source)) {
     return res.status(400).json({
-      error: `Invalid category. Must be one of: ${VALID_INCOME_CATEGORIES.join(", ")}`
+      error: `Invalid source. Must be one of: ${VALID_INCOME_CATEGORIES.join(", ")}`
     });
   }
 
@@ -518,7 +543,6 @@ app.post("/income", requireUser, async (req, res) => {
       user_id: req.user.id,
       date,
       source,
-      category,
       amount: Number(amount),
       note: note ?? null,
     })
@@ -526,6 +550,11 @@ app.post("/income", requireUser, async (req, res) => {
     .single();
 
   if (error) return res.status(500).json({ error: error.message });
+
+  // Fire-and-forget milestone checks (new income affects income total and savings rate denominator)
+  void checkAndUnlockMilestones(supabaseAdmin, req.user.id, 'income');
+  void checkAndUnlockMilestones(supabaseAdmin, req.user.id, 'savings');
+
   return res.status(201).json({ entry: data });
 });
 
@@ -540,6 +569,256 @@ app.delete("/income/:id", requireUser, async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message });
   return res.json({ success: true });
+});
+
+// ── Milestones ────────────────────────────────────────────────────────────────
+app.get("/milestones", requireUser, async (req, res) => {
+  const { data: all } = await supabaseAdmin
+    .from('milestones')
+    .select('*')
+    .order('id');
+
+  const { data: unlocked } = await supabaseAdmin
+    .from('user_milestones')
+    .select('milestone_id, unlocked_at')
+    .eq('user_id', req.user.id);
+
+  const unlockedMap = new Map((unlocked ?? []).map(u => [u.milestone_id, u.unlocked_at]));
+  const result = (all ?? []).map(m => ({
+    ...m,
+    unlocked:    unlockedMap.has(m.id),
+    unlocked_at: unlockedMap.get(m.id) ?? null,
+  }));
+
+  res.json({ milestones: result, unlockedCount: unlocked?.length ?? 0 });
+});
+
+// ── Roadmap & AI Coaching ─────────────────────────────────────────────────────
+app.get("/roadmap", requireUser, async (req, res) => {
+  try {
+    // 1. Fetch current profile — same query as GET /profile
+    const { data: profileRow, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("*")
+      .eq("user_id", req.user.id)
+      .single();
+
+    if (profileError || !profileRow) {
+      console.error("[GET /roadmap] Profile fetch failed:", profileError?.message);
+      return res.json({
+        task:        null,
+        explanation: "Keep building your financial habits — check back soon for personalized guidance.",
+        source:      "error",
+      });
+    }
+
+    const profile       = mapProfile(profileRow);
+    // learningLevel: experienceScore / 2 → beginner=2→1, learning=4→2, intermediate=6→3, advanced=8→4
+    const learningLevel = Math.max(1, Math.min(4, profile.breakdown.experienceScore / 2));
+
+    // 2. Check cache
+    const cached = await getCachedRoadmap(supabaseAdmin, req.user.id);
+
+    // 3. Cache hit: score unchanged → return cached explanation, skip Groq entirely
+    //    Still call determineNextTask() (cheap deterministic math) to reconstruct
+    //    the full task/progress object for the response.
+    if (cached && cached.scoreSnapshot === profile.valamScore) {
+      const roadmapResult = determineNextTask(profile, learningLevel);
+      return res.json({
+        task:        roadmapResult,
+        explanation: cached.explanation,
+        source:      "cache",
+      });
+    }
+
+    // 4. Cache miss: score changed or first visit — call full pipeline
+    const roadmapResult = determineNextTask(profile, learningLevel);
+
+    const firstName = (profile.name ?? "").split(" ")[0].trim() || "";
+    const { explanation, source } = await generateCoachingExplanation(groq, roadmapResult, firstName);
+
+    // Persist the new cache entry (await so it's ready for the immediate next request)
+    try {
+      await setCachedRoadmap(
+        supabaseAdmin,
+        req.user.id,
+        explanation,
+        roadmapResult.task.taskType,
+        profile.valamScore,
+      );
+    } catch (cacheErr) {
+      console.error("[GET /roadmap] Cache write failed (non-fatal):", cacheErr.message);
+    }
+
+    return res.json({
+      task:        roadmapResult,
+      explanation,
+      source,
+    });
+  } catch (err) {
+    console.error("[GET /roadmap] Unexpected error:", err.message);
+    return res.json({
+      task:        null,
+      explanation: "Keep building your financial habits — check back soon for personalized guidance.",
+      source:      "error",
+    });
+  }
+});
+
+// ── Learning Hub ─────────────────────────────────────────────────────────────
+const LEVEL_NAMES = ['Seed', 'Explorer', 'Builder', 'Accelerator', 'Achiever', 'Wealth Creator', 'Wealth Architect', 'Legend'];
+
+// IMPORTANT: /learning/recent must be registered BEFORE /learning/:level
+// so Express doesn't treat "recent" as a level parameter.
+app.get("/learning/recent", requireUser, async (req, res) => {
+  try {
+    const { data: progress, error } = await supabaseAdmin
+      .from("learning_progress")
+      .select("level, topic_order, status, last_viewed_at")
+      .eq("user_id", req.user.id)
+      .order("last_viewed_at", { ascending: false })
+      .limit(3);
+
+    if (error) throw error;
+
+    if (!progress || progress.length === 0) {
+      return res.json({ recent: [] });
+    }
+
+    // Fetch topic names for each recent row
+    const enriched = await Promise.all(
+      progress.map(async (p) => {
+        const { data: content } = await supabaseAdmin
+          .from("learning_content")
+          .select("topic_name")
+          .eq("level", p.level)
+          .eq("topic_order", p.topic_order)
+          .limit(1)
+          .single();
+
+        return {
+          level:        p.level,
+          levelName:    LEVEL_NAMES[p.level - 1] ?? "",
+          topicOrder:   p.topic_order,
+          topicName:    content?.topic_name ?? "",
+          status:       p.status,
+          lastViewedAt: p.last_viewed_at,
+        };
+      })
+    );
+
+    return res.json({ recent: enriched });
+  } catch (err) {
+    console.error("[GET /learning/recent]", err.message);
+    return res.status(500).json({ error: "Failed to fetch recent topics" });
+  }
+});
+
+app.get("/learning/:level", requireUser, async (req, res) => {
+  const levelParam = parseInt(req.params.level, 10);
+
+  if (Number.isNaN(levelParam) || levelParam < 1 || levelParam > 8) {
+    return res.status(400).json({ error: "Invalid level: must be 1–8" });
+  }
+
+  try {
+    // Fetch all sub-concepts for this level
+    const { data: content, error: contentErr } = await supabaseAdmin
+      .from("learning_content")
+      .select("topic_order, topic_name, sub_concept_order, sub_concept_name, explanation, check_question, check_answer")
+      .eq("level", levelParam)
+      .order("topic_order")
+      .order("sub_concept_order");
+
+    if (contentErr) throw contentErr;
+
+    // Fetch user progress for this level
+    const { data: progress } = await supabaseAdmin
+      .from("learning_progress")
+      .select("topic_order, status, last_viewed_at, completed_at")
+      .eq("user_id", req.user.id)
+      .eq("level", levelParam);
+
+    const progressMap = new Map((progress ?? []).map(p => [p.topic_order, p]));
+
+    // Group by topic
+    const topicMap = new Map();
+    for (const row of (content ?? [])) {
+      if (!topicMap.has(row.topic_order)) {
+        topicMap.set(row.topic_order, {
+          topicOrder:   row.topic_order,
+          topicName:    row.topic_name,
+          subConcepts:  [],
+          status:       progressMap.get(row.topic_order)?.status       ?? "not_started",
+          lastViewedAt: progressMap.get(row.topic_order)?.last_viewed_at ?? null,
+          completedAt:  progressMap.get(row.topic_order)?.completed_at   ?? null,
+        });
+      }
+      topicMap.get(row.topic_order).subConcepts.push({
+        subConceptOrder: row.sub_concept_order,
+        subConceptName:  row.sub_concept_name,
+        explanation:     row.explanation,
+        checkQuestion:   row.check_question,
+        checkAnswer:     row.check_answer,
+      });
+    }
+
+    const topics = Array.from(topicMap.values());
+    const totalTopics    = topics.length;
+    const topicsCompleted = topics.filter(t => t.status === "completed").length;
+
+    return res.json({
+      level:      levelParam,
+      levelName:  LEVEL_NAMES[levelParam - 1] ?? "",
+      topics,
+      summary: {
+        totalTopics,
+        topicsCompleted,
+        topicsRemaining: totalTopics - topicsCompleted,
+      },
+    });
+  } catch (err) {
+    console.error("[GET /learning/:level]", err.message);
+    return res.status(500).json({ error: "Failed to fetch learning content" });
+  }
+});
+
+app.post("/learning/progress", requireUser, async (req, res) => {
+  const { level, topicOrder, status } = req.body;
+
+  if (!level || !topicOrder || !status) {
+    return res.status(400).json({ error: "Missing required fields: level, topicOrder, status" });
+  }
+
+  const VALID_STATUSES = ["not_started", "continue", "completed"];
+  if (!VALID_STATUSES.includes(status)) {
+    return res.status(400).json({ error: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}` });
+  }
+
+  try {
+    const update = {
+      user_id:        req.user.id,
+      level:          Number(level),
+      topic_order:    Number(topicOrder),
+      status,
+      last_viewed_at: new Date().toISOString(),
+    };
+
+    if (status === "completed") {
+      update.completed_at = new Date().toISOString();
+    }
+
+    const { error } = await supabaseAdmin
+      .from("learning_progress")
+      .upsert(update, { onConflict: "user_id, level, topic_order" });
+
+    if (error) throw error;
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("[POST /learning/progress]", err.message);
+    return res.status(500).json({ error: "Failed to update progress" });
+  }
 });
 
 // ── Start server ──────────────────────────────────────────────────────────────

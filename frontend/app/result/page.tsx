@@ -19,6 +19,7 @@ export default function ResultPage() {
   const [result, setResult] = useState<VALAMResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [requiresSignup, setRequiresSignup] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     if (hasSaved.current) return
@@ -52,7 +53,7 @@ export default function ResultPage() {
 
       try {
         const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
-        await fetch(`${BASE}/profile/save-assessment`, {
+        const saveRes = await fetch(`${BASE}/profile/save-assessment`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -82,8 +83,17 @@ export default function ResultPage() {
             },
           }),
         })
+        if (!saveRes.ok) {
+          const body = await saveRes.text()
+          console.error('save-assessment failed:', saveRes.status, body)
+          let msg: string
+          try { msg = (JSON.parse(body) as { error?: string; detail?: string }).error ?? `HTTP ${saveRes.status}` }
+          catch { msg = `HTTP ${saveRes.status}` }
+          setSaveError(msg)
+        }
       } catch (err) {
         console.error('Failed to save profile:', err)
+        setSaveError('Network error — check your connection and try again.')
       }
     }
 
@@ -210,6 +220,34 @@ export default function ResultPage() {
               }}>
                 Log In
               </a>
+            </div>
+          </div>
+        )}
+
+        {/* ── Save error banner ── */}
+        {saveError && (
+          <div style={{
+            maxWidth: 600,
+            margin: '0 auto 24px',
+            background: 'rgba(192,57,43,0.12)',
+            border: '1px solid rgba(192,57,43,0.4)',
+            borderRadius: 16,
+            padding: '14px 20px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 10,
+          }}>
+            <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+            <div>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13,
+                fontWeight: 600, color: '#f5a5a5', marginBottom: 4 }}>
+                Score could not be saved
+              </div>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12,
+                color: 'rgba(245,240,232,0.7)', lineHeight: 1.5 }}>
+                {saveError} — your result is shown below but was not persisted.
+                Refresh and try again, or contact support if the problem persists.
+              </div>
             </div>
           </div>
         )}

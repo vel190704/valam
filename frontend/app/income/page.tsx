@@ -10,8 +10,7 @@ type IncomeCategory =
 interface IncomeEntry {
   id: string
   date: string
-  source: string
-  category: IncomeCategory
+  source: IncomeCategory
   amount: number
   note?: string
 }
@@ -63,11 +62,11 @@ function SavingsGauge({ rate }: { rate: number }) {
   if (rate === 0) return (
     <div style={{ padding:'16px 0', textAlign:'center',
       color:'var(--muted)', fontSize:12 }}>
-      Savings rate will be calculated once expense tracking is added.
+      Add income entries and investments to calculate your savings rate.
       <br/>
       <span style={{ fontSize:11, color:'var(--gold)',
         marginTop:6, display:'block' }}>
-        Coming soon: Expense Tracker
+        Rate = invested ÷ income earned this financial year
       </span>
     </div>
   )
@@ -115,7 +114,7 @@ function IncomeDonut({ entries }: { entries: IncomeEntry[] }) {
     </div>
   )
   const totals: Partial<Record<IncomeCategory, number>> = {}
-  entries.forEach(e => { totals[e.category] = (totals[e.category] ?? 0) + e.amount })
+  entries.forEach(e => { totals[e.source] = (totals[e.source] ?? 0) + e.amount })
   const grand = Object.values(totals).reduce((a, b) => a + (b ?? 0), 0) || 1
   const slices = (Object.entries(totals) as [IncomeCategory, number][]).sort((a, b) => b[1] - a[1])
   const circumference = 2 * Math.PI * 52
@@ -236,10 +235,10 @@ export default function IncomePage() {
   const [entries, setEntries]         = useState<IncomeEntry[]>([])
   const [loading, setLoading]         = useState(true)
   const [dark, setDark]               = useState(false)
-  const savingsRate = 0
+  const [savingsRate, setSavingsRate]               = useState(0)
+  const [monthlySavingsRate, setMonthlySavingsRate] = useState<number | null>(null)
 
   const [fDate, setFDate]     = useState('')
-  const [fSource, setFSource] = useState('')
   const [fCat, setFCat]       = useState<IncomeCategory>('salary')
   const [fAmount, setFAmount] = useState('')
   const [fNote, setFNote]     = useState('')
@@ -255,12 +254,20 @@ export default function IncomePage() {
     if (!session?.user) { setLoading(false); return }
 
     const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
-    const res = await fetch(`${BASE}/income`, {
-      headers: { 'Authorization': `Bearer ${session.access_token}` },
-    })
-    if (res.ok) {
-      const json = await res.json() as { entries: IncomeEntry[] }
+    const headers = { 'Authorization': `Bearer ${session.access_token}` }
+
+    const [incRes, profileRes] = await Promise.all([
+      fetch(`${BASE}/income`,  { headers }),
+      fetch(`${BASE}/profile`, { headers }),
+    ])
+    if (incRes.ok) {
+      const json = await incRes.json() as { entries: IncomeEntry[] }
       setEntries(json.entries ?? [])
+    }
+    if (profileRes.ok) {
+      const json = await profileRes.json() as { liveSavingsRate?: number; monthlySavingsRate?: number | null }
+      setSavingsRate(json.liveSavingsRate ?? 0)
+      setMonthlySavingsRate(json.monthlySavingsRate ?? null)
     }
     setLoading(false)
   }, [])
@@ -270,7 +277,6 @@ export default function IncomePage() {
   async function handleAdd() {
     setFormErr('')
     if (!fDate) { setFormErr('Select a date'); return }
-    if (!fSource.trim()) { setFormErr('Enter income source'); return }
     const amt = parseFloat(fAmount)
     if (!fAmount || isNaN(amt) || amt <= 0) { setFormErr('Enter a valid amount'); return }
     setSaving(true)
@@ -286,8 +292,7 @@ export default function IncomePage() {
       },
       body: JSON.stringify({
         date: fDate,
-        source: fSource.trim(),
-        category: fCat,
+        source: fCat,
         amount: amt,
         note: fNote.trim() || undefined,
       }),
@@ -295,18 +300,30 @@ export default function IncomePage() {
     const json = await res.json() as { entry?: IncomeEntry; error?: string }
     if (!res.ok) { setFormErr(json.error ?? 'Failed to save'); setSaving(false); return }
     setEntries(prev => [json.entry!, ...prev])
-    setFDate(''); setFSource(''); setFAmount(''); setFNote(''); setFCat('salary')
+    setFDate(''); setFAmount(''); setFNote(''); setFCat('salary')
     setSaving(false)
+  }
+
+  function handleDuplicate(e: IncomeEntry) {
+    setFDate('')
+    setFCat(e.source)
+    setFAmount(String(e.amount))
+    setFNote(e.note ?? '')
   }
 
   async function handleDelete(id: string) {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
     const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
-    await fetch(`${BASE}/income/${id}`, {
+    const res = await fetch(`${BASE}/income/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${session.access_token}` },
     })
+    if (!res.ok) {
+      const body = await res.text()
+      console.error('Failed to delete income entry:', res.status, body)
+      return
+    }
     setEntries(prev => prev.filter(e => e.id !== id))
   }
 
@@ -325,7 +342,7 @@ export default function IncomePage() {
   const growthPct = prevMonthIncome > 0
     ? Math.round(((monthlyIncome - prevMonthIncome) / prevMonthIncome) * 100)
     : null
-  const uniqueSources = new Set(entries.map(e => e.category)).size
+  const uniqueSources = new Set(entries.map(e => e.source)).size
 
   const stability      = uniqueSources >= 3 ? 'Strong' : uniqueSources === 2 ? 'Moderate' : 'Weak'
   const growth         = growthPct !== null ? growthPct > 5 ? 'Strong' : growthPct > 0 ? 'Moderate' : 'Weak' : 'Moderate'
@@ -372,12 +389,13 @@ export default function IncomePage() {
       <div style={{ maxWidth:1100, margin:'0 auto', padding:'20px 24px 80px' }}>
 
         {/* SUMMARY ROW */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr',
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr 1fr',
           gap:12, marginBottom:16 }}>
           {[
-            { label:'Monthly Income',   value: fmt(monthlyIncome), sub:'this month' },
-            { label:'Savings Rate',     value:'—',                 sub:'Add expense data to calculate' },
-            { label:'Income Sources',   value:`${uniqueSources}`,  sub:'categories tracked' },
+            { label:'Monthly Income',             value: fmt(monthlyIncome), sub:'this month' },
+            { label:'Savings Rate (FY)',           value: savingsRate > 0 ? `${savingsRate}%` : '—', sub: savingsRate > 0 ? 'invested ÷ income this FY' : 'Add income & investments' },
+            { label:'Savings Rate (This Month)',   value: monthlySavingsRate !== null ? `${monthlySavingsRate}%` : '—', sub: monthlySavingsRate !== null ? 'invested ÷ income this month' : 'Add income this month to calculate' },
+            { label:'Income Sources',             value:`${uniqueSources}`,  sub:'categories tracked' },
             {
               label:'Income Growth',
               value: growthPct !== null ? `${growthPct > 0 ? '+' : ''}${growthPct}%` : '—',
@@ -405,12 +423,12 @@ export default function IncomePage() {
           border:'1px solid var(--border)', marginBottom:16 }}>
           <div style={{ fontSize:10, color:'var(--muted)', letterSpacing:'.45px',
             textTransform:'uppercase', fontWeight:500, marginBottom:14 }}>Add Income Entry</div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr',
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr',
             gap:12, marginBottom:12 }}>
             <div>
               <label style={{ fontSize:10, color:'var(--muted)', fontWeight:500,
-                display:'block', marginBottom:5 }}>Date</label>
-              <input type="date" value={fDate}
+                display:'block', marginBottom:5 }}>Date <span style={{ color:'var(--red)' }}>*</span></label>
+              <input type="date" value={fDate} required
                 max={new Date().toISOString().split('T')[0]}
                 onChange={e => setFDate(e.target.value)}
                 style={{ width:'100%', background:'var(--surface2)',
@@ -420,15 +438,6 @@ export default function IncomePage() {
             <div>
               <label style={{ fontSize:10, color:'var(--muted)', fontWeight:500,
                 display:'block', marginBottom:5 }}>Source</label>
-              <input type="text" value={fSource} placeholder="e.g. TCS Salary"
-                onChange={e => setFSource(e.target.value)}
-                style={{ width:'100%', background:'var(--surface2)',
-                  border:'1px solid var(--border-md)', borderRadius:10,
-                  padding:'10px 12px', fontSize:12, color:'var(--text)' }}/>
-            </div>
-            <div>
-              <label style={{ fontSize:10, color:'var(--muted)', fontWeight:500,
-                display:'block', marginBottom:5 }}>Category</label>
               <select value={fCat} onChange={e => setFCat(e.target.value as IncomeCategory)}
                 style={{ width:'100%', background:'var(--surface2)',
                   border:'1px solid var(--border-md)', borderRadius:10,
@@ -492,8 +501,8 @@ export default function IncomePage() {
         <div style={{ background:'var(--surface)', borderRadius:18, padding:'20px 22px',
           border:'1px solid var(--border)', marginBottom:16 }}>
           <div style={{ fontSize:10, color:'var(--muted)', letterSpacing:'.45px',
-            textTransform:'uppercase', fontWeight:500, marginBottom:4 }}>Savings Rate Progress</div>
-          <SavingsGauge rate={0}/>
+            textTransform:'uppercase', fontWeight:500, marginBottom:4 }}>Savings Rate Progress (FY)</div>
+          <SavingsGauge rate={savingsRate}/>
         </div>
 
         {/* INCOME HEALTH */}
@@ -531,10 +540,10 @@ export default function IncomePage() {
               </span>
             </div>
             <div style={{ display:'grid',
-              gridTemplateColumns:'110px 1fr 120px 130px 80px',
+              gridTemplateColumns:'110px 1fr 130px 120px',
               gap:12, padding:'6px 10px',
               background:'var(--surface2)', borderRadius:8, marginBottom:8 }}>
-              {['Date','Source','Category','Amount',''].map(h => (
+              {['Date','Source','Amount','Actions'].map(h => (
                 <div key={h} style={{ fontSize:10, color:'var(--muted)', fontWeight:600,
                   letterSpacing:'.4px', textTransform:'uppercase',
                   textAlign: h === 'Amount' ? 'right' : 'left' }}>{h}</div>
@@ -542,7 +551,7 @@ export default function IncomePage() {
             </div>
             {entries.map((e, i) => (
               <div key={e.id} style={{ display:'grid',
-                gridTemplateColumns:'110px 1fr 120px 130px 80px',
+                gridTemplateColumns:'110px 1fr 130px 120px',
                 gap:12, padding:'10px 10px', alignItems:'center',
                 borderBottom: i < entries.length - 1
                   ? '1px solid rgba(180,155,110,0.08)' : 'none' }}>
@@ -551,30 +560,36 @@ export default function IncomePage() {
                     day:'numeric', month:'short', year:'numeric'
                   })}
                 </div>
-                <div>
-                  <div style={{ fontSize:13, color:'var(--text)', fontWeight:500 }}>{e.source}</div>
-                  {e.note && (
-                    <div style={{ fontSize:10, color:'var(--muted)', marginTop:2 }}>{e.note}</div>
-                  )}
-                </div>
                 <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                   <div style={{ width:7, height:7, borderRadius:'50%',
-                    background:CAT_META[e.category]?.color ?? '#999', flexShrink:0 }}/>
-                  <span style={{ fontSize:12, color:'var(--text-sm)' }}>
-                    {CAT_META[e.category]?.label ?? e.category}
-                  </span>
+                    background:CAT_META[e.source]?.color ?? '#999', flexShrink:0 }}/>
+                  <div>
+                    <span style={{ fontSize:13, color:'var(--text)', fontWeight:500 }}>
+                      {CAT_META[e.source]?.emoji} {CAT_META[e.source]?.label ?? e.source}
+                    </span>
+                    {e.note && (
+                      <div style={{ fontSize:10, color:'var(--muted)', marginTop:2 }}>{e.note}</div>
+                    )}
+                  </div>
                 </div>
                 <div style={{ fontFamily:'Playfair Display,serif', fontSize:13,
                   color:'var(--green)', fontWeight:500, textAlign:'right' }}>
                   {fmt(e.amount)}
                 </div>
-                <div>
+                <div style={{ display:'flex', gap:5 }}>
+                  <button onClick={() => handleDuplicate(e)}
+                    style={{ background:'rgba(184,146,74,0.08)',
+                      border:'1px solid rgba(184,146,74,0.35)',
+                      color:'var(--gold)', borderRadius:8,
+                      padding:'3px 8px', fontSize:10 }}>
+                    Dup
+                  </button>
                   <button onClick={() => handleDelete(e.id)}
                     style={{ background:'rgba(192,57,43,0.08)',
                       border:'1px solid rgba(192,57,43,0.2)',
                       color:'var(--red)', borderRadius:8,
-                      padding:'3px 10px', fontSize:10 }}>
-                    Delete
+                      padding:'3px 8px', fontSize:10 }}>
+                    Del
                   </button>
                 </div>
               </div>

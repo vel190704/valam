@@ -8,7 +8,8 @@ export default function Footer() {
 
   useEffect(() => {
     const appPages = ['/dashboard', '/portfolio', '/networth',
-      '/income', '/result', '/onboarding', '/auth', '/profile']
+      '/income', '/result', '/onboarding', '/auth', '/profile',
+      '/learning', '/milestones', '/allocation']
     setHidden(appPages.some(p => window.location.pathname.startsWith(p)))
   }, [])
 

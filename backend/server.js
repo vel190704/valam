@@ -4,10 +4,12 @@ import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import Groq from "groq-sdk";
 import { calculateLiveSavingsRate, calculateMonthlySavingsRate } from "./lib/savingsRate.js";
+import { calculateVALAM } from "./lib/valam.js";
 import { checkAndUnlockMilestones } from "./lib/milestoneEngine.js";
 import { determineNextTask } from "./lib/roadmapEngine.js";
 import { generateCoachingExplanation } from "./lib/aiCoach.js";
 import { getCachedRoadmap, setCachedRoadmap } from "./lib/roadmapCache.js";
+import { getFinancialYearStart } from "./lib/financialYear.js";
 
 dotenv.config();
 dotenv.config({ path: ".env.local" });           // loads GROQ_API_KEY from backend/.env.local
@@ -64,9 +66,32 @@ const VALID_INCOME_CATEGORIES = [
 ];
 
 const VALID_NETWORTH_CATEGORIES = [
-  "cash", "emergency", "property", "vehicle", "other_asset",
+  "cash", "emergency", "property", "vehicle", "vehicle_loan", "other_asset",
   "debt", "emi", "other_liability"
 ];
+
+// ── VALAM key mappers ─────────────────────────────────────────────────────────
+function rateToSavingsKey(rate) {
+  if (rate >= 40) return '40+'
+  if (rate >= 30) return '30-40'
+  if (rate >= 20) return '20-30'
+  if (rate >= 15) return '15-20'
+  if (rate >= 10) return '10-15'
+  if (rate >= 5)  return '5-10'
+  if (rate >= 2)  return '2-5'
+  return '<2'
+}
+
+function amountToIncomeKey(annual) {
+  if (annual >= 5000000)  return '50L+'
+  if (annual >= 3000000)  return '30L-50L'
+  if (annual >= 2000000)  return '20L-30L'
+  if (annual >= 1200000)  return '12L-20L'
+  if (annual >= 800000)   return '8L-12L'
+  if (annual >= 500000)   return '5L-8L'
+  if (annual >= 300000)   return '3L-5L'
+  return '<3L'
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getRecommendation(level, goal) {
@@ -153,11 +178,15 @@ function assessmentToProfile(userId, body, onboarded) {
     potential_level:      body.potentialLevel      ?? null,
     potential_level_name: body.potentialLevelName  ?? null,
     wealth_velocity:      body.wealthVelocity      ?? null,
-    savings_score:        body.breakdown?.savingsScore     ?? null,
-    investments_score:    body.breakdown?.investmentsScore ?? null,
-    income_score:         body.breakdown?.incomeScore      ?? null,
-    experience_score:     body.breakdown?.experienceScore  ?? null,
-    age_score:            body.breakdown?.ageScore         ?? null,
+    savings_score:          body.breakdown?.savingsScore          ?? null,
+    investments_score:      body.breakdown?.investmentsScore      ?? null,
+    income_score:           body.breakdown?.incomeScore           ?? null,
+    experience_score:       body.breakdown?.experienceScore       ?? null,
+    age_score:              body.breakdown?.ageScore              ?? null,
+    emergency_fund:         body.emergencyFund                    ?? null,
+    high_interest_debt:     body.highInterestDebt                 ?? null,
+    health_insurance:       body.healthInsurance                  ?? null,
+    financial_health_score: body.breakdown?.financialHealthScore  ?? null,
     onboarded,
   };
 }
@@ -291,6 +320,104 @@ app.get("/profile", requireUser, async (req, res) => {
     return res.status(500).json({ error: "Failed to fetch profile" });
   }
 
+  // ── Compute actual net worth from networth_items (for PDF formula) ──────────
+  const NW_LIABILITY_CATS = new Set(["debt", "emi", "other_liability", "vehicle_loan"]);
+  const nwFetch = await supabaseAdmin
+    .from("networth_items")
+    .select("category, amount")
+    .eq("user_id", req.user.id);
+  const totalAssets = (nwFetch.data ?? [])
+    .filter(r => !NW_LIABILITY_CATS.has(r.category))
+    .reduce((s, r) => s + Number(r.amount), 0);
+  const totalLiabilities = (nwFetch.data ?? [])
+    .filter(r => NW_LIABILITY_CATS.has(r.category))
+    .reduce((s, r) => s + Number(r.amount), 0);
+  const computedNetWorth = totalAssets - totalLiabilities;
+  // ── Compute live savings rate and income from FY transactions ──────────────
+  const fyStart = getFinancialYearStart();
+  const fyDate  = new Date(fyStart);
+  const nowDate = new Date();
+  const monthsElapsed = Math.max(1,
+    (nowDate.getFullYear() - fyDate.getFullYear()) * 12 +
+    (nowDate.getMonth() - fyDate.getMonth()) + 1
+  );
+  const [liveInvResult, liveIncResult] = await Promise.all([
+    supabaseAdmin.from('investments').select('amount').eq('user_id', req.user.id).gte('date', fyStart),
+    supabaseAdmin.from('income_entries').select('amount').eq('user_id', req.user.id).gte('date', fyStart),
+  ]);
+  const totalInvestedFY    = (liveInvResult.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
+  const totalIncomeFY      = (liveIncResult.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
+  const fyLiveSavingsRate  = totalIncomeFY > 0 ? (totalInvestedFY / totalIncomeFY) * 100 : 0;
+  const annualisedIncome   = (totalIncomeFY / Math.max(1, monthsElapsed)) * 12;
+
+  const liveSavingsKey = totalIncomeFY > 0
+    ? rateToSavingsKey(fyLiveSavingsRate)
+    : (profile.savings_rate ?? '<2');
+  const liveIncomeKey = totalIncomeFY > 0
+    ? amountToIncomeKey(annualisedIncome)
+    : (profile.income ?? '<3L');
+
+  // ── VALAM recalculation + dual-score ratchet ─────────────────────────────
+  let scoreStatus      = "stable";
+  let calculatedScore  = profile.valam_score ?? 0;
+  let currentScore     = profile.current_score ?? profile.valam_score ?? 0;
+
+  if (profile.investments && profile.experience && profile.age) {
+    const fresh = calculateVALAM({
+      age:             Number(profile.age),
+      income:          liveIncomeKey,
+      savingsRate:     liveSavingsKey,
+      investments:     profile.investments,
+      experience:      profile.experience,
+      netWorth:        computedNetWorth,
+      emergencyFund:   profile.emergency_fund    ?? null,
+      highInterestDebt: profile.high_interest_debt ?? null,
+      healthInsurance: profile.health_insurance  ?? null,
+    });
+
+    calculatedScore = fresh.positionScore;
+    const storedCurrent = profile.current_score ?? profile.valam_score ?? 0;
+
+    if (fresh.positionScore > storedCurrent) {
+      // Promotion: calculated beats stored high-water mark — ratchet up
+      scoreStatus  = "promotion";
+      currentScore = fresh.positionScore;
+      await supabaseAdmin
+        .from("profiles")
+        .update({
+          calculated_score:       fresh.positionScore,
+          current_score:          fresh.positionScore,
+          valam_score:            fresh.positionScore,
+          valam_level:            fresh.positionLevel,
+          valam_level_name:       fresh.positionLevelName,
+          financial_health_score: fresh.breakdown.financialHealthScore,
+        })
+        .eq("user_id", req.user.id);
+    } else if (fresh.positionScore < storedCurrent) {
+      // Regression: calculated dipped below high-water mark — store calc only
+      scoreStatus  = "regression";
+      currentScore = storedCurrent;
+      await supabaseAdmin
+        .from("profiles")
+        .update({
+          calculated_score:       fresh.positionScore,
+          financial_health_score: fresh.breakdown.financialHealthScore,
+        })
+        .eq("user_id", req.user.id);
+    } else {
+      // Stable: no change
+      scoreStatus  = "stable";
+      currentScore = storedCurrent;
+      await supabaseAdmin
+        .from("profiles")
+        .update({
+          calculated_score:       fresh.positionScore,
+          financial_health_score: fresh.breakdown.financialHealthScore,
+        })
+        .eq("user_id", req.user.id);
+    }
+  }
+
   // Also fetch investments, networth items, and income entries
   const [invResult, nwResult, incResult] = await Promise.all([
     supabaseAdmin
@@ -313,10 +440,13 @@ app.get("/profile", requireUser, async (req, res) => {
   const monthlySavingsRate  = await calculateMonthlySavingsRate(supabaseAdmin, req.user.id);
 
   return res.json({
-    profile:        mapProfile(profile),
-    investments:    invResult.data  ?? [],
-    networthItems:  nwResult.data   ?? [],
-    incomeEntries:  incResult.data  ?? [],
+    profile:         mapProfile(profile),
+    scoreStatus,
+    calculatedScore,
+    currentScore,
+    investments:     invResult.data  ?? [],
+    networthItems:   nwResult.data   ?? [],
+    incomeEntries:   incResult.data  ?? [],
     liveSavingsRate,
     monthlySavingsRate,
   });
@@ -465,36 +595,41 @@ app.get("/networth", requireUser, async (req, res) => {
 });
 
 app.post("/networth", requireUser, async (req, res) => {
-  const { category, label, amount, note } = req.body;
+  try {
+    const { category, label, amount, note } = req.body;
 
-  if (!category || !label || amount == null) {
-    return res.status(400).json({ error: "Missing required fields: category, label, amount" });
+    if (!category || !label || amount == null) {
+      return res.status(400).json({ error: "Missing required fields: category, label, amount" });
+    }
+
+    if (!VALID_NETWORTH_CATEGORIES.includes(category)) {
+      return res.status(400).json({
+        error: `Invalid category. Must be one of: ${VALID_NETWORTH_CATEGORIES.join(", ")}`
+      });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("networth_items")
+      .insert({
+        user_id: req.user.id,
+        category,
+        label,
+        amount: Number(amount),
+        note: note ?? null,
+      })
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Fire-and-forget milestone check
+    void checkAndUnlockMilestones(supabaseAdmin, req.user.id, 'networth');
+
+    return res.status(201).json({ item: data });
+  } catch (err) {
+    console.error('POST /networth error:', err)
+    return res.status(500).json({ error: 'Internal server error', detail: err.message })
   }
-
-  if (!VALID_NETWORTH_CATEGORIES.includes(category)) {
-    return res.status(400).json({
-      error: `Invalid category. Must be one of: ${VALID_NETWORTH_CATEGORIES.join(", ")}`
-    });
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from("networth_items")
-    .insert({
-      user_id: req.user.id,
-      category,
-      label,
-      amount: Number(amount),
-      note: note ?? null,
-    })
-    .select()
-    .single();
-
-  if (error) return res.status(500).json({ error: error.message });
-
-  // Fire-and-forget milestone check
-  void checkAndUnlockMilestones(supabaseAdmin, req.user.id, 'networth');
-
-  return res.status(201).json({ item: data });
 });
 
 app.delete("/networth/:id", requireUser, async (req, res) => {
@@ -613,6 +748,72 @@ app.get("/roadmap", requireUser, async (req, res) => {
     }
 
     const profile       = mapProfile(profileRow);
+
+    // Compute actual net worth for PDF formula
+    const NW_LIABILITY_CATS_R = new Set(["debt", "emi", "other_liability", "vehicle_loan"]);
+    const nwResultR = await supabaseAdmin
+      .from("networth_items")
+      .select("category, amount")
+      .eq("user_id", req.user.id);
+    const totalAssetsR = (nwResultR.data ?? [])
+      .filter(r => !NW_LIABILITY_CATS_R.has(r.category))
+      .reduce((s, r) => s + Number(r.amount), 0);
+    const totalLiabilitiesR = (nwResultR.data ?? [])
+      .filter(r => NW_LIABILITY_CATS_R.has(r.category))
+      .reduce((s, r) => s + Number(r.amount), 0);
+    const roadmapNetWorth = totalAssetsR - totalLiabilitiesR;
+
+    // ── Compute live savings rate and income from FY transactions ──────────
+    const fyStartR  = getFinancialYearStart();
+    const fyDateR   = new Date(fyStartR);
+    const nowDateR  = new Date();
+    const monthsElapsedR = Math.max(1,
+      (nowDateR.getFullYear() - fyDateR.getFullYear()) * 12 +
+      (nowDateR.getMonth() - fyDateR.getMonth()) + 1
+    );
+    const [liveInvResultR, liveIncResultR] = await Promise.all([
+      supabaseAdmin.from('investments').select('amount').eq('user_id', req.user.id).gte('date', fyStartR),
+      supabaseAdmin.from('income_entries').select('amount').eq('user_id', req.user.id).gte('date', fyStartR),
+    ]);
+    const totalInvestedFYR  = (liveInvResultR.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
+    const totalIncomeFYR    = (liveIncResultR.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
+    const liveSavingsRateR  = totalIncomeFYR > 0 ? (totalInvestedFYR / totalIncomeFYR) * 100 : 0;
+    const annualisedIncomeR = (totalIncomeFYR / monthsElapsedR) * 12;
+
+    const liveSavingsKeyR = totalIncomeFYR > 0
+      ? rateToSavingsKey(liveSavingsRateR)
+      : (profileRow.savings_rate ?? '<2');
+    const liveIncomeKeyR = totalIncomeFYR > 0
+      ? amountToIncomeKey(annualisedIncomeR)
+      : (profileRow.income ?? '<3L');
+
+    // Compute fresh factor scores from live savings/income + stored profile fields
+    let freshFactorScores = null;
+    if (profileRow.investments && profileRow.experience && profileRow.age) {
+      const fresh = calculateVALAM({
+        age:             Number(profileRow.age),
+        income:          liveIncomeKeyR,
+        savingsRate:     liveSavingsKeyR,
+        investments:     profileRow.investments,
+        experience:      profileRow.experience,
+        netWorth:        roadmapNetWorth,
+        emergencyFund:   profileRow.emergency_fund    ?? null,
+        highInterestDebt: profileRow.high_interest_debt ?? null,
+        healthInsurance: profileRow.health_insurance  ?? null,
+      });
+      freshFactorScores = {
+        nw:              fresh.breakdown.netWorthScore,
+        wv:              fresh.breakdown.wealthVelocityScore,
+        sav:             fresh.breakdown.savingsScore,
+        inc:             fresh.breakdown.incomeScore,
+        exp:             fresh.breakdown.experienceScore,
+        fh:              fresh.breakdown.financialHealthScore,
+        emergencyFund:   profileRow.emergency_fund    ?? null,
+        highInterestDebt: profileRow.high_interest_debt ?? null,
+        healthInsurance: profileRow.health_insurance  ?? null,
+      };
+    }
+
     // learningLevel: experienceScore / 2 → beginner=2→1, learning=4→2, intermediate=6→3, advanced=8→4
     const learningLevel = Math.max(1, Math.min(4, profile.breakdown.experienceScore / 2));
 
@@ -623,16 +824,17 @@ app.get("/roadmap", requireUser, async (req, res) => {
     //    Still call determineNextTask() (cheap deterministic math) to reconstruct
     //    the full task/progress object for the response.
     if (cached && cached.scoreSnapshot === profile.valamScore) {
-      const roadmapResult = determineNextTask(profile, learningLevel);
+      const roadmapResult = determineNextTask(profile, learningLevel, freshFactorScores);
       return res.json({
         task:        roadmapResult,
+        tasks:       roadmapResult.tasks,
         explanation: cached.explanation,
         source:      "cache",
       });
     }
 
     // 4. Cache miss: score changed or first visit — call full pipeline
-    const roadmapResult = determineNextTask(profile, learningLevel);
+    const roadmapResult = determineNextTask(profile, learningLevel, freshFactorScores);
 
     const firstName = (profile.name ?? "").split(" ")[0].trim() || "";
     const { explanation, source } = await generateCoachingExplanation(groq, roadmapResult, firstName);
@@ -652,6 +854,7 @@ app.get("/roadmap", requireUser, async (req, res) => {
 
     return res.json({
       task:        roadmapResult,
+      tasks:       roadmapResult.tasks,
       explanation,
       source,
     });

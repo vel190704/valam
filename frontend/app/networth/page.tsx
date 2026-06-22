@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import DNavbar from '@/components/layout/dnavbar'
 
 interface NetworthItem {
   id: string
@@ -279,20 +280,9 @@ export default function NetworthPage() {
       `}</style>
 
       {/* NAV */}
-      <nav style={{ position: 'sticky', top: 0, zIndex: 20, height: 52,
-        background: 'var(--surface)', borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', padding: '0 20px', gap: 14 }}>
-        <button onClick={() => router.push('/dashboard')}
-          style={{ background: 'none', color: 'var(--gold)', fontSize: 18, padding: 0,
-            lineHeight: 1 }}>←</button>
-        <span style={{ fontFamily: 'Playfair Display,serif', fontSize: 16,
-          color: 'var(--text)', flex: 1 }}>Net Worth</span>
-        <button onClick={() => setDark(d => !d)}
-          style={{ background: 'var(--surface2)', border: '1px solid var(--border)',
-            color: 'var(--text)', borderRadius: 8, padding: '5px 10px', fontSize: 12 }}>
-          {dark ? '☀' : '☾'}
-        </button>
-      </nav>
+          <DNavbar
+      activeTab="Net Worth"
+      />
 
       <div style={{ maxWidth: 680, margin: '0 auto', padding: '20px 16px 80px' }}>
 

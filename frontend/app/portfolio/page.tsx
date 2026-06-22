@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import DNavbar from '@/components/layout/dnavbar'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type InvestmentType = 'mf' | 'stock' | 'fd' | 'crypto' | 'bond' | 'etf' | 'realestate'
@@ -318,7 +319,6 @@ export default function PortfolioPage() {
 
   useEffect(() => { void loadInvestments() }, [loadInvestments])
 
-
   async function handleAdd() {
     setFormError('')
     const amt = parseFloat(formAmount)
@@ -402,32 +402,9 @@ export default function PortfolioPage() {
     <main style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'Inter,sans-serif' }}>
       <style>{CSS}</style>
 
-      {/* TOP NAV */}
-      <nav style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)',
-        padding: '0 28px', height: 52, display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 20,
-        boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <button onClick={() => router.push('/dashboard')}
-            style={{ background: 'none', border: 'none',
-              color: 'var(--muted)', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>←</button>
-          <div style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--gold)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>V</span>
-          </div>
-          <span style={{ fontFamily: 'Playfair Display,serif',
-            fontWeight: 600, fontSize: 16, color: 'var(--text)' }}>
-            VALAM · Portfolio
-          </span>
-        </div>
-        <button onClick={() => setDark(!dark)}
-          style={{ background: 'var(--surface2)', border: '1px solid var(--border)',
-            borderRadius: 20, padding: '4px 12px', fontSize: 11,
-            color: 'var(--muted)', cursor: 'pointer' }}>
-          {dark ? '☀️ Light' : '🌙 Dark'}
-        </button>
-      </nav>
-
+      <DNavbar
+activeTab="Portfolio"
+/>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 24px 80px' }}>
 
         {/* ADD INVESTMENT */}

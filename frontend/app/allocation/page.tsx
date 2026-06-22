@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getAllocation, TYPE_TO_SUGGESTED } from '@/lib/allocation'
-
+import DNavbar from '@/components/layout/dnavbar'
 // ── Types ──────────────────────────────────────────────────────────────────
 interface Investment {
   id: string
@@ -189,25 +189,9 @@ export default function AllocationPage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 40 }}>
       <style>{CSS}</style>
 
-      {/* Navbar */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 30, background: 'var(--surface)',
-        borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center',
-        gap: 10, padding: '0 20px', height: 52 }}>
-        <button onClick={() => router.push('/dashboard')}
-          style={{ background: 'none', border: 'none', color: 'var(--muted)',
-            fontSize: 20, cursor: 'pointer', lineHeight: 1, padding: '2px 4px' }}>
-          ←
-        </button>
-        <span style={{ fontFamily: 'Playfair Display,serif', fontSize: 16,
-          fontWeight: 700, color: 'var(--gold)', flex: 1 }}>
-          Asset Allocation
-        </span>
-        <button onClick={toggleDark}
-          style={{ background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 16, color: 'var(--muted)' }}>
-          {dark ? '☀' : '◑'}
-        </button>
-      </div>
+          <DNavbar
+            activeTab="Allocation"
+            />
 
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '24px 16px' }}>
         {error && (

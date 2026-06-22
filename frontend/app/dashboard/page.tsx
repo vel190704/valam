@@ -8,6 +8,7 @@ import Link from 'next/link'
 
 interface DashboardData {
   name:               string
+  age:                number
   valamScore:         number
   valamLevel:         number
   valamLevelName:     string
@@ -16,6 +17,9 @@ interface DashboardData {
   potentialLevelName: string
   goal:               string
   investments:        string
+  scoreStatus:        'promotion' | 'regression' | 'stable'
+  calculatedScore:    number
+  currentScore:       number
   breakdown: {
     savingsScore:     number
     investmentsScore: number
@@ -39,10 +43,20 @@ interface NetworthItem {
   amount: number
 }
 
+interface RoadmapTaskEntry {
+  rank: number
+  factor: string
+  taskType: string
+  title: string
+  detail?: string
+  allowAllocationDiscussion: boolean
+}
+
 interface RoadmapTaskResult {
   weakestFactor: string
   weightedGap: number
-  task: { taskType: string; title: string; allowAllocationDiscussion: boolean }
+  task: RoadmapTaskEntry
+  tasks: RoadmapTaskEntry[]
   currentLevel: number
   currentLevelName: string
   nextLevelName: string | null
@@ -51,6 +65,7 @@ interface RoadmapTaskResult {
 
 interface RoadmapResponse {
   task: RoadmapTaskResult | null
+  tasks?: RoadmapTaskEntry[]
   explanation: string
   source: 'llm' | 'cache' | 'fallback' | 'error'
 }
@@ -89,6 +104,12 @@ const CSS = `
   body{background:var(--bg);color:var(--text);font-family:Inter,sans-serif;}
 `
 
+function getPotentialLevel(age: number): number {
+  if (age < 40)  return 8  // Legend
+  if (age <= 70) return 7  // Wealth Architect
+  return 6                 // Wealth Creator
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [data, setData]                     = useState<DashboardData | null>(null)
@@ -126,28 +147,40 @@ export default function DashboardPage() {
         if (profileRes.ok) {
           const json = await profileRes.json() as {
             profile: {
-              name: string; valamScore: number; valamLevel: number
+              name: string; age: number; valamScore: number; valamLevel: number
               valamLevelName: string; potentialScore?: number
               potentialLevel?: number; potentialLevelName?: string
               goal: string; investments: string
               breakdown: DashboardData['breakdown']
             }
+            scoreStatus?:        'promotion' | 'regression' | 'stable'
+            calculatedScore?:    number
+            currentScore?:       number
             investments?:        InvestmentEntry[]
             networthItems?:      NetworthItem[]
             liveSavingsRate?:    number
             monthlySavingsRate?: number | null
           }
           const p = json.profile
+          const computedPotLevel = getPotentialLevel(p.age ?? 0)
+          const status = json.scoreStatus ?? 'stable'
+          if (status === 'promotion') {
+            sessionStorage.setItem('valam_promoted', '1')
+          }
           setData({
             name:               p.name,
-            valamScore:         p.valamScore,
+            age:                p.age ?? 0,
+            valamScore:         json.currentScore ?? p.valamScore,
             valamLevel:         p.valamLevel,
             valamLevelName:     p.valamLevelName,
-            potentialScore:     p.potentialScore     ?? 0,
-            potentialLevel:     p.potentialLevel     ?? Math.min(8, p.valamLevel + 2),
-            potentialLevelName: p.potentialLevelName ?? LEVEL_NAMES_ARR[Math.min(7, p.valamLevel + 1)],
+            potentialScore:     p.potentialScore ?? 0,
+            potentialLevel:     computedPotLevel,
+            potentialLevelName: LEVEL_NAMES_ARR[computedPotLevel - 1],
             goal:               p.goal,
             investments:        p.investments,
+            scoreStatus:        status,
+            calculatedScore:    json.calculatedScore ?? p.valamScore,
+            currentScore:       json.currentScore    ?? p.valamScore,
             breakdown:          p.breakdown,
           })
           setInvestments(json.investments ?? [])
@@ -192,7 +225,11 @@ export default function DashboardPage() {
     router.push('/')
   }
 
-  const currentLevel   = data?.valamLevel ?? 1
+  const liveScore     = data?.calculatedScore ?? data?.currentScore ?? 0
+  const liveLevel     = liveScore >= 7.5 ? 8 : Math.floor(liveScore)
+  const liveLevelName = LEVEL_NAMES_ARR[Math.max(0, liveLevel - 1)] ?? 'Seed'
+
+  const currentLevel   = liveLevel
   const potentialLevel = data?.potentialLevel ?? Math.min(8, currentLevel + 2)
 
   const portfolioTotal = investments.reduce((s, i) => s + i.amount, 0)
@@ -223,7 +260,7 @@ export default function DashboardPage() {
   )
 
 
-  const LIABILITY_CATS = ['debt', 'emi', 'other_liability']
+  const LIABILITY_CATS = ['debt', 'emi', 'other_liability', 'vehicle_loan']
   const totalAssets = networthItems
     .filter(i => !LIABILITY_CATS.includes(i.category))
     .reduce((s, i) => s + i.amount, 0)
@@ -366,7 +403,7 @@ export default function DashboardPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
                   <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--gold)' }} />
                   <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-                    {data.valamLevelName} · Level {data.valamLevel}
+                    {liveLevelName} · Level {liveLevel}
                   </span>
                 </div>
               </div>
@@ -380,6 +417,28 @@ export default function DashboardPage() {
               </span>
             </div>
           </div>
+
+          {/* SCORE STATUS PILL */}
+          {data.scoreStatus === 'promotion' && (
+            <div style={{ marginBottom: 14,
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: 'rgba(76,175,80,0.12)', border: '1px solid rgba(76,175,80,0.3)',
+              borderRadius: 20, padding: '5px 14px' }}>
+              <span style={{ fontSize: 11, color: 'var(--green)', fontWeight: 700 }}>
+                ↑ Level up! Keep going
+              </span>
+            </div>
+          )}
+          {data.scoreStatus === 'regression' && (
+            <div style={{ marginBottom: 14,
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: 'rgba(184,146,74,0.10)', border: '1px solid rgba(184,146,74,0.3)',
+              borderRadius: 20, padding: '5px 14px' }}>
+              <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700 }}>
+                ⚠ Score dipped — follow today's tasks to recover
+              </span>
+            </div>
+          )}
 
           {/* WEALTH JOURNEY METER */}
           <div style={{ position: 'relative', padding: '6px 0 0' }}>
@@ -435,7 +494,7 @@ export default function DashboardPage() {
             {/* DUAL-HANDLE SLIDER */}
             {(() => {
               const pctToNext = roadmap?.task?.progressToNextLevel ??
-                Math.round((data.valamScore - Math.floor(data.valamScore)) * 100)
+                Math.round((liveScore - Math.floor(liveScore)) * 100)
 
               const scoreToTrackPct = (score: number, level: number): number => {
                 if (level >= 8) return 100
@@ -443,7 +502,7 @@ export default function DashboardPage() {
                 return (((level - 1) + Math.max(0, Math.min(1, score - level))) / 7) * 100
               }
 
-              const currentTrackPct   = scoreToTrackPct(data.valamScore, currentLevel)
+              const currentTrackPct   = scoreToTrackPct(liveScore, liveLevel)
               const potentialTrackPct = data.potentialScore > 0
                 ? scoreToTrackPct(data.potentialScore, potentialLevel)
                 : ((potentialLevel - 1) / 7) * 100
@@ -456,9 +515,9 @@ export default function DashboardPage() {
                       <div style={{ fontSize: 9, color: 'var(--gold)', fontWeight: 700,
                         letterSpacing: '.4px', textTransform: 'uppercase' }}>Current</div>
                       <div style={{ fontFamily: 'Playfair Display,serif', fontSize: 13,
-                        color: 'var(--text)' }}>{data.valamLevelName}</div>
+                        color: 'var(--text)' }}>{liveLevelName}</div>
                       <div style={{ fontSize: 10, color: 'var(--muted)' }}>
-                        Score {data.valamScore.toFixed(2)}
+                        Score {liveScore.toFixed(2)}
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
@@ -509,7 +568,7 @@ export default function DashboardPage() {
                     <div style={{ position: 'absolute', left: `${currentTrackPct}%`, top: 44,
                       transform: 'translateX(-50%)', whiteSpace: 'nowrap',
                       fontSize: 8, color: 'var(--gold)', fontWeight: 600 }}>
-                      {data.valamLevelName}
+                      {liveLevelName}
                     </div>
 
                     {/* Potential handle — 20px circle, center at top:28 → top:18 */}
@@ -771,7 +830,9 @@ export default function DashboardPage() {
                   ? (roadmap.task.nextLevelName
                       ? `${roadmap.task.currentLevelName} → ${roadmap.task.nextLevelName}`
                       : roadmap.task.currentLevelName)
-                  : `${data.valamLevelName} → ${LEVEL_NAMES_ARR[Math.min(7, currentLevel)]}`}
+                  : (liveLevel < 8
+                      ? `${liveLevelName} → ${LEVEL_NAMES_ARR[liveLevel]}`
+                      : liveLevelName)}
               </div>
             </div>
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
@@ -782,7 +843,7 @@ export default function DashboardPage() {
               </span>
               <div style={{ background:'var(--gold)', color:'#fff', fontSize:11,
                 fontWeight:600, padding:'4px 12px', borderRadius:12 }}>
-                Level {roadmap?.task?.currentLevel ?? data.valamLevel}
+                Level {liveLevel}
               </div>
             </div>
           </div>
@@ -794,19 +855,39 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div style={{ paddingTop:4 }}>
-              <div style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom:10 }}>
-                <div style={{ width:18, height:18, borderRadius:'50%', flexShrink:0, marginTop:2,
-                  background:'var(--gold)',
-                  display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <span style={{ color:'#fff', fontSize:10 }}>→</span>
+              {(roadmap.tasks ?? roadmap.task.tasks ?? [roadmap.task.task]).map((t, idx) => (
+                <div key={t.rank ?? idx}
+                  style={{ display:'flex', alignItems:'flex-start', gap:10,
+                    marginBottom: idx < 2 ? 14 : 0,
+                    paddingBottom: idx < 2 ? 14 : 0,
+                    borderBottom: idx < 2 ? '1px solid var(--border)' : 'none' }}>
+                  <div style={{ width:20, height:20, borderRadius:'50%', flexShrink:0, marginTop:1,
+                    background: idx === 0 ? 'var(--gold)' : 'var(--surface2)',
+                    border: idx > 0 ? '1px solid var(--border)' : 'none',
+                    display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <span style={{ color: idx === 0 ? '#fff' : 'var(--muted)', fontSize:10, fontWeight:700 }}>
+                      {idx + 1}
+                    </span>
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize: idx === 0 ? 13 : 12, fontWeight: idx === 0 ? 600 : 500,
+                      color: idx === 0 ? 'var(--text)' : 'var(--text-sm)', lineHeight:1.4,
+                      marginBottom: (idx === 0 && roadmap.explanation) || (idx > 0 && t.detail) ? 5 : 0 }}>
+                      {t.title}
+                    </div>
+                    {idx === 0 && roadmap.explanation && (
+                      <div style={{ fontSize:12, color:'var(--muted)', lineHeight:1.6 }}>
+                        {roadmap.explanation}
+                      </div>
+                    )}
+                    {idx > 0 && t.detail && (
+                      <div style={{ fontSize:11, color:'var(--muted)', lineHeight:1.55 }}>
+                        {t.detail}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <span style={{ fontSize:13, fontWeight:600, color:'var(--text)', lineHeight:1.4 }}>
-                  {roadmap.task.task.title}
-                </span>
-              </div>
-              <div style={{ fontSize:12, color:'var(--muted)', lineHeight:1.6, paddingLeft:28 }}>
-                {roadmap.explanation}
-              </div>
+              ))}
             </div>
           )}
         </div>

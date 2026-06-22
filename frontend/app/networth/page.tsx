@@ -21,6 +21,7 @@ const ASSET_CATS: { key: string; label: string; color: string }[] = [
 const LIABILITY_CATS: { key: string; label: string; color: string }[] = [
   { key: 'debt',            label: 'Loan / Debt',       color: '#E74C3C' },
   { key: 'emi',             label: 'EMI Outstanding',   color: '#C0392B' },
+  { key: 'vehicle_loan',    label: 'Vehicle Loan',      color: '#D35400' },
   { key: 'other_liability', label: 'Other Liability',   color: '#E07B54' },
 ]
 const ALL_CATS = [...ASSET_CATS, ...LIABILITY_CATS]

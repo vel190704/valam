@@ -8,6 +8,7 @@ interface NetworthItem {
   category: string
   label: string
   amount: number
+  note?: string
 }
 
 const ASSET_CATS: { key: string; label: string; color: string }[] = [
@@ -219,12 +220,24 @@ export default function NetworthPage() {
     setSubmitting(false)
   }
 
+  function duplicateItem(item: NetworthItem) {
+    setFormCat(item.category)
+    setFormLabel(item.label)
+    setFormAmt(String(item.amount))
+    setFormNote(item.note ?? '')
+  }
+
   async function deleteItem(id: string) {
     const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
-    await fetch(`${BASE}/networth/${id}`, {
+    const res = await fetch(`${BASE}/networth/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     })
+    if (!res.ok) {
+      const body = await res.text()
+      console.error('Failed to delete networth item:', res.status, body)
+      return
+    }
     setItems(prev => prev.filter(i => i.id !== id))
   }
 
@@ -378,6 +391,10 @@ export default function NetworthPage() {
                         fontSize: 15, color: 'var(--green)', fontWeight: 600 }}>
                         {fmt(item.amount)}
                       </div>
+                      <button onClick={() => duplicateItem(item)}
+                        style={{ background: 'none', color: 'var(--gold)', fontSize: 11,
+                          border: '1px solid rgba(184,146,74,0.35)',
+                          padding: '2px 8px', borderRadius: 6 }}>Dup</button>
                       <button onClick={() => deleteItem(item.id)}
                         style={{ background: 'none', color: 'var(--muted)', fontSize: 16,
                           padding: '2px 6px', borderRadius: 6,
@@ -424,6 +441,10 @@ export default function NetworthPage() {
                         fontSize: 15, color: 'var(--red)', fontWeight: 600 }}>
                         {fmt(item.amount)}
                       </div>
+                      <button onClick={() => duplicateItem(item)}
+                        style={{ background: 'none', color: 'var(--gold)', fontSize: 11,
+                          border: '1px solid rgba(184,146,74,0.35)',
+                          padding: '2px 8px', borderRadius: 6 }}>Dup</button>
                       <button onClick={() => deleteItem(item.id)}
                         style={{ background: 'none', color: 'var(--muted)', fontSize: 16,
                           padding: '2px 6px', borderRadius: 6, lineHeight: 1 }}>×</button>

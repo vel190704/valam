@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LEVEL_NAMES_ARR } from '@/lib/valam'
+import { getAllocation } from '@/lib/allocation'
 import Link from 'next/link'
 
 interface DashboardData {
@@ -10,6 +11,7 @@ interface DashboardData {
   valamScore:         number
   valamLevel:         number
   valamLevelName:     string
+  potentialScore:     number
   potentialLevel:     number
   potentialLevelName: string
   goal:               string
@@ -25,7 +27,7 @@ interface DashboardData {
 
 interface InvestmentEntry {
   id: string
-  date: string
+  date?: string
   type: string
   amount: number
 }
@@ -37,30 +39,20 @@ interface NetworthItem {
   amount: number
 }
 
-function getAllocation(level: number) {
-  if (level <= 2) return [
-    { label: 'Emergency Fund', pct: 50, color: 'var(--gold)'   },
-    { label: 'FDs',            pct: 30, color: 'var(--bronze)' },
-    { label: 'Mutual Funds',   pct: 20, color: '#C4A07A'       },
-  ]
-  if (level <= 4) return [
-    { label: 'Mutual Funds',   pct: 40, color: 'var(--gold)'   },
-    { label: 'FDs',            pct: 25, color: 'var(--bronze)' },
-    { label: 'Stocks',         pct: 20, color: '#C4A07A'       },
-    { label: 'Emergency Fund', pct: 15, color: '#7A9EAA'       },
-  ]
-  if (level <= 6) return [
-    { label: 'Stocks',       pct: 40, color: 'var(--gold)'   },
-    { label: 'Mutual Funds', pct: 30, color: 'var(--bronze)' },
-    { label: 'Bonds',        pct: 15, color: '#C4A07A'       },
-    { label: 'Gold',         pct: 15, color: '#7A9EAA'       },
-  ]
-  return [
-    { label: 'Stocks',        pct: 35, color: 'var(--gold)'   },
-    { label: 'International', pct: 25, color: 'var(--bronze)' },
-    { label: 'Alternatives',  pct: 20, color: '#C4A07A'       },
-    { label: 'Bonds',         pct: 20, color: '#7A9EAA'       },
-  ]
+interface RoadmapTaskResult {
+  weakestFactor: string
+  weightedGap: number
+  task: { taskType: string; title: string; allowAllocationDiscussion: boolean }
+  currentLevel: number
+  currentLevelName: string
+  nextLevelName: string | null
+  progressToNextLevel: number
+}
+
+interface RoadmapResponse {
+  task: RoadmapTaskResult | null
+  explanation: string
+  source: 'llm' | 'cache' | 'fallback' | 'error'
 }
 
 function savingsRateLabel(score: number): string {
@@ -105,6 +97,12 @@ export default function DashboardPage() {
   const [loading, setLoading]               = useState(true)
   const [dataSource, setDataSource]   = useState<'live' | 'none'>('none')
   const [dark, setDark]               = useState(false)
+  const [milestonesUnlocked, setMilestonesUnlocked] = useState(0)
+  const [recentMilestones, setRecentMilestones]     = useState<{ name: string; unlocked_at: string }[]>([])
+  const [savingsRate, setSavingsRate]               = useState(0)
+  const [monthlySavingsRate, setMonthlySavingsRate] = useState<number | null>(null)
+  const [roadmap, setRoadmap]                       = useState<RoadmapResponse | null>(null)
+  const [recentLearning, setRecentLearning]         = useState<{ topicName: string; status: string }[]>([])
 
   useEffect(() => {
     document.body.classList.toggle('dark', dark)
@@ -115,26 +113,29 @@ export default function DashboardPage() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.user) { setLoading(false); return }
 
+      const BASE    = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+      const headers = { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }
+
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'}/profile`,
-          {
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        )
-        if (res.ok) {
-          const json = await res.json() as {
+        const [profileRes, milestonesRes, roadmapRes, learningRes] = await Promise.all([
+          fetch(`${BASE}/profile`,          { headers }),
+          fetch(`${BASE}/milestones`,       { headers }),
+          fetch(`${BASE}/roadmap`,          { headers }),
+          fetch(`${BASE}/learning/recent`,  { headers }),
+        ])
+        if (profileRes.ok) {
+          const json = await profileRes.json() as {
             profile: {
               name: string; valamScore: number; valamLevel: number
-              valamLevelName: string; potentialLevel?: number
-              potentialLevelName?: string; goal: string
-              investments: string; breakdown: DashboardData['breakdown']
+              valamLevelName: string; potentialScore?: number
+              potentialLevel?: number; potentialLevelName?: string
+              goal: string; investments: string
+              breakdown: DashboardData['breakdown']
             }
-            investments?:   InvestmentEntry[]
-            networthItems?: NetworthItem[]
+            investments?:        InvestmentEntry[]
+            networthItems?:      NetworthItem[]
+            liveSavingsRate?:    number
+            monthlySavingsRate?: number | null
           }
           const p = json.profile
           setData({
@@ -142,6 +143,7 @@ export default function DashboardPage() {
             valamScore:         p.valamScore,
             valamLevel:         p.valamLevel,
             valamLevelName:     p.valamLevelName,
+            potentialScore:     p.potentialScore     ?? 0,
             potentialLevel:     p.potentialLevel     ?? Math.min(8, p.valamLevel + 2),
             potentialLevelName: p.potentialLevelName ?? LEVEL_NAMES_ARR[Math.min(7, p.valamLevel + 1)],
             goal:               p.goal,
@@ -150,10 +152,33 @@ export default function DashboardPage() {
           })
           setInvestments(json.investments ?? [])
           setNetworthItems(json.networthItems ?? [])
+          setSavingsRate(json.liveSavingsRate ?? 0)
+          setMonthlySavingsRate(json.monthlySavingsRate ?? null)
           setDataSource('live')
         }
+        if (milestonesRes.ok) {
+          const mJson = await milestonesRes.json() as {
+            milestones: { name: string; unlocked: boolean; unlocked_at: string | null }[]
+            unlockedCount: number
+          }
+          setMilestonesUnlocked(mJson.unlockedCount ?? 0)
+          const recent = (mJson.milestones ?? [])
+            .filter(m => m.unlocked && m.unlocked_at)
+            .sort((a, b) => new Date(b.unlocked_at!).getTime() - new Date(a.unlocked_at!).getTime())
+            .slice(0, 3)
+            .map(m => ({ name: m.name, unlocked_at: m.unlocked_at! }))
+          setRecentMilestones(recent)
+        }
+        if (roadmapRes.ok) {
+          const rJson = await roadmapRes.json() as RoadmapResponse
+          setRoadmap(rJson)
+        }
+        if (learningRes.ok) {
+          const lJson = await learningRes.json() as { recent: { topicName: string; status: string }[] }
+          setRecentLearning(lJson.recent ?? [])
+        }
       } catch (err) {
-        console.log('Failed to load profile:', err)
+        console.error('Failed to load dashboard:', err)
       }
       setLoading(false)
     }
@@ -167,7 +192,6 @@ export default function DashboardPage() {
     router.push('/')
   }
 
-  const allocation     = getAllocation(data?.valamLevel ?? 3)
   const currentLevel   = data?.valamLevel ?? 1
   const potentialLevel = data?.potentialLevel ?? Math.min(8, currentLevel + 2)
 
@@ -299,18 +323,19 @@ export default function DashboardPage() {
       <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)',
         padding: '0 28px', height: 44, display: 'flex', alignItems: 'stretch',
         position: 'sticky', top: 52, zIndex: 19 }}>
-        {(['Dashboard', 'Portfolio', 'Net Worth', 'Goals', 'SIP'] as const).map(tab => (
+        {(['Dashboard', 'Portfolio', 'Net Worth', 'Goals', 'Allocation'] as const).map(tab => (
           <div key={tab}
             onClick={() => {
               if (tab === 'Portfolio') router.push('/portfolio')
               if (tab === 'Net Worth') router.push('/networth')
+              if (tab === 'Allocation') router.push('/allocation')
             }}
             style={{ display: 'flex', alignItems: 'center', gap: 7,
               padding: '0 18px', fontSize: 12, fontWeight: 500,
               color: tab === 'Dashboard' ? 'var(--gold)' : 'var(--muted)',
               borderBottom: tab === 'Dashboard'
                 ? '2.5px solid var(--gold)' : '2.5px solid transparent',
-              cursor: tab === 'Portfolio' || tab === 'Net Worth' ? 'pointer' : 'default' }}>
+              cursor: tab === 'Portfolio' || tab === 'Net Worth' || tab === 'Allocation' ? 'pointer' : 'default' }}>
             {tab}
           </div>
         ))}
@@ -357,7 +382,7 @@ export default function DashboardPage() {
           </div>
 
           {/* WEALTH JOURNEY METER */}
-          <div style={{ position: 'relative', padding: '6px 0 36px' }}>
+          <div style={{ position: 'relative', padding: '6px 0 0' }}>
             <div style={{ position: 'absolute', top: 18, left: '6.25%', right: '6.25%',
               height: 4, background: 'rgba(180,155,110,0.15)', borderRadius: 4 }}>
               <div style={{ height: '100%', borderRadius: 4,
@@ -407,19 +432,119 @@ export default function DashboardPage() {
               })}
             </div>
 
-            <div style={{ display: 'flex', gap: 16, marginTop: 10 }}>
-              {[
-                { color: 'var(--gold)',     label: 'Current level',    dashed: false },
-                { color: 'var(--bronze)',   label: 'Potential range',  dashed: true  },
-                { color: 'var(--surface2)', label: 'Upcoming levels',  dashed: false },
-              ].map(l => (
-                <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: l.color,
-                    border: l.dashed ? '1.5px dashed var(--bronze)' : 'none' }} />
-                  <span style={{ fontSize: 9.5, color: 'var(--muted)' }}>{l.label}</span>
-                </div>
-              ))}
-            </div>
+            {/* DUAL-HANDLE SLIDER */}
+            {(() => {
+              const pctToNext = roadmap?.task?.progressToNextLevel ??
+                Math.round((data.valamScore - Math.floor(data.valamScore)) * 100)
+
+              const scoreToTrackPct = (score: number, level: number): number => {
+                if (level >= 8) return 100
+                if (level === 7) return ((6 + Math.min(1, (score - 7.0) / 0.5)) / 7) * 100
+                return (((level - 1) + Math.max(0, Math.min(1, score - level))) / 7) * 100
+              }
+
+              const currentTrackPct   = scoreToTrackPct(data.valamScore, currentLevel)
+              const potentialTrackPct = data.potentialScore > 0
+                ? scoreToTrackPct(data.potentialScore, potentialLevel)
+                : ((potentialLevel - 1) / 7) * 100
+
+              return (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between',
+                    marginTop: 14, marginBottom: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 9, color: 'var(--gold)', fontWeight: 700,
+                        letterSpacing: '.4px', textTransform: 'uppercase' }}>Current</div>
+                      <div style={{ fontFamily: 'Playfair Display,serif', fontSize: 13,
+                        color: 'var(--text)' }}>{data.valamLevelName}</div>
+                      <div style={{ fontSize: 10, color: 'var(--muted)' }}>
+                        Score {data.valamScore.toFixed(2)}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 9, color: 'var(--bronze)', fontWeight: 700,
+                        letterSpacing: '.4px', textTransform: 'uppercase' }}>Potential</div>
+                      <div style={{ fontFamily: 'Playfair Display,serif', fontSize: 13,
+                        color: 'var(--text)' }}>{data.potentialLevelName}</div>
+                      <div style={{ fontSize: 10, color: 'var(--muted)' }}>
+                        Level {potentialLevel}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Track container — 6.25% margins align handles with node centers */}
+                  <div style={{ position: 'relative', height: 60, margin: '0 6.25%' }}>
+                    {/* Track background */}
+                    <div style={{ position: 'absolute', top: 28, left: 0, right: 0, height: 4,
+                      background: 'var(--surface2)', borderRadius: 4 }}>
+                      <div style={{ position: 'absolute', left: 0,
+                        width: `${currentTrackPct}%`, height: '100%',
+                        background: 'linear-gradient(90deg,var(--gold),var(--gold-lt))',
+                        borderRadius: 4 }} />
+                      {potentialTrackPct > currentTrackPct && (
+                        <div style={{ position: 'absolute', left: `${currentTrackPct}%`,
+                          width: `${potentialTrackPct - currentTrackPct}%`,
+                          height: '100%', background: 'rgba(143,104,40,0.18)',
+                          borderRadius: 4 }} />
+                      )}
+                    </div>
+
+                    {/* % to next badge above current handle */}
+                    <div style={{ position: 'absolute', left: `${currentTrackPct}%`, top: 2,
+                      transform: 'translateX(-50%)', whiteSpace: 'nowrap',
+                      background: 'var(--gold)', color: '#fff', fontSize: 8,
+                      fontWeight: 700, padding: '1px 5px', borderRadius: 4 }}>
+                      {pctToNext}% to {LEVEL_NAMES_ARR[Math.min(7, currentLevel)]}
+                    </div>
+
+                    {/* Current handle — 24px circle, center at top:28 → top:16 */}
+                    <div style={{ position: 'absolute', left: `${currentTrackPct}%`, top: 16,
+                      transform: 'translateX(-50%)',
+                      width: 24, height: 24, borderRadius: '50%', background: 'var(--gold)',
+                      color: '#fff', fontSize: 10, fontWeight: 700,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      boxShadow: '0 0 0 5px rgba(184,146,74,0.15)' }}>
+                      {currentLevel}
+                    </div>
+                    <div style={{ position: 'absolute', left: `${currentTrackPct}%`, top: 44,
+                      transform: 'translateX(-50%)', whiteSpace: 'nowrap',
+                      fontSize: 8, color: 'var(--gold)', fontWeight: 600 }}>
+                      {data.valamLevelName}
+                    </div>
+
+                    {/* Potential handle — 20px circle, center at top:28 → top:18 */}
+                    <div style={{ position: 'absolute', left: `${potentialTrackPct}%`, top: 18,
+                      transform: 'translateX(-50%)',
+                      width: 20, height: 20, borderRadius: '50%',
+                      background: 'rgba(143,104,40,0.08)',
+                      border: '2px dashed var(--bronze)', color: 'var(--bronze)',
+                      fontSize: 9, fontWeight: 700,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {potentialLevel}
+                    </div>
+                    <div style={{ position: 'absolute', left: `${potentialTrackPct}%`, top: 42,
+                      transform: 'translateX(-50%)', whiteSpace: 'nowrap',
+                      fontSize: 8, color: 'var(--bronze)', fontWeight: 600 }}>
+                      {data.potentialLevelName}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
+                    {[
+                      { color: 'var(--gold)',   label: 'Current position', dashed: false },
+                      { color: 'var(--bronze)', label: 'Potential',        dashed: true  },
+                    ].map(l => (
+                      <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%',
+                          background: l.color,
+                          border: l.dashed ? '1.5px dashed var(--bronze)' : 'none' }} />
+                        <span style={{ fontSize: 9, color: 'var(--muted)' }}>{l.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )
+            })()}
           </div>
         </div>
 
@@ -493,79 +618,89 @@ export default function DashboardPage() {
               <div style={{ fontSize:10, color:'var(--muted)',
                 letterSpacing:'.45px', textTransform:'uppercase',
                 fontWeight:500, marginBottom:8 }}>Income &amp; Savings</div>
-              <div style={{ fontFamily:'Playfair Display,serif',
-                fontSize:24, color:'var(--text)', marginBottom:4 }}>
-                —
-              </div>
-              <div style={{ fontSize:11, color:'var(--muted)', marginBottom:12 }}>
-                Add income to calculate
-              </div>
-              {(() => (
-                <div style={{ padding:'10px 12px',
-                  background:'rgba(184,146,74,0.06)',
-                  borderRadius:10,
-                  border:'1px dashed rgba(184,146,74,0.2)',
-                  marginBottom:8 }}>
-                  <div style={{ fontSize:10, color:'var(--muted)', lineHeight:1.6 }}>
-                    Track your income sources and savings rate on the Income page.
+              {savingsRate > 0 ? (
+                <>
+                  <div style={{ fontFamily:'Playfair Display,serif',
+                    fontSize:24, color:'var(--text)', marginBottom:4 }}>
+                    {savingsRate}%
                   </div>
-                </div>
-              ))()}
+                  <div style={{ fontSize:11, color:'var(--muted)', marginBottom:8 }}>
+                    Savings rate (FY)
+                  </div>
+                  {monthlySavingsRate !== null && (
+                    <div style={{ fontSize:11, color:'var(--muted)', marginBottom:10 }}>
+                      This month:{' '}
+                      <span style={{ color:'var(--text)', fontWeight:600 }}>
+                        {monthlySavingsRate}%
+                      </span>
+                    </div>
+                  )}
+                  <div style={{ padding:'8px 12px',
+                    background:'rgba(74,122,74,0.08)', borderRadius:10,
+                    border:'1px solid rgba(74,122,74,0.15)', marginBottom:8 }}>
+                    <div style={{ fontSize:10, color:'var(--muted)', lineHeight:1.6 }}>
+                      invested ÷ income this financial year
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontFamily:'Playfair Display,serif',
+                    fontSize:24, color:'var(--text)', marginBottom:4 }}>
+                    —
+                  </div>
+                  <div style={{ fontSize:11, color:'var(--muted)', marginBottom:12 }}>
+                    Add income to calculate
+                  </div>
+                  <div style={{ padding:'10px 12px',
+                    background:'rgba(184,146,74,0.06)', borderRadius:10,
+                    border:'1px dashed rgba(184,146,74,0.2)', marginBottom:8 }}>
+                    <div style={{ fontSize:10, color:'var(--muted)', lineHeight:1.6 }}>
+                      Track your income sources and savings rate on the Income page.
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
             <span style={{ fontSize:11, color:'var(--gold)', fontWeight:600 }}>Track Income →</span>
           </div>
 
-          {/* NEXT MILESTONE */}
-          <div style={{ background:'var(--surface)', borderRadius:18, padding:'18px 20px',
-            border:'1px solid var(--border)', display:'flex', flexDirection:'column' }}>
+          {/* MILESTONES */}
+          <div onClick={() => router.push('/milestones')}
+            style={{ background:'var(--surface)', borderRadius:18, padding:'18px 20px',
+              border:'1px solid var(--border)', display:'flex', flexDirection:'column',
+              cursor:'pointer' }}>
             <div style={{ fontSize:10, color:'var(--muted)', letterSpacing:'.45px',
-              textTransform:'uppercase', fontWeight:500, marginBottom:14 }}>Next Milestone</div>
-            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
+              textTransform:'uppercase', fontWeight:500, marginBottom:14 }}>Milestones</div>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
               <div style={{ width:36, height:36, borderRadius:10,
                 background:'linear-gradient(135deg,var(--gold),var(--bronze))',
                 display:'flex', alignItems:'center', justifyContent:'center',
                 fontSize:18, flexShrink:0 }}>🏆</div>
               <div>
-                <div style={{ fontSize:12, fontWeight:600, color:'var(--text)' }}>
-                  Reach {LEVEL_NAMES_ARR[Math.min(7, currentLevel)]}
+                <div style={{ fontSize:18, fontWeight:700, color:'var(--gold)', lineHeight:1 }}>
+                  {milestonesUnlocked}
+                  <span style={{ fontSize:11, color:'var(--muted)', fontWeight:400 }}>/80</span>
                 </div>
-                <div style={{ fontSize:10, color:'var(--muted)', marginTop:2 }}>
-                  Level {currentLevel} → Level {Math.min(8, currentLevel + 1)}
-                </div>
+                <div style={{ fontSize:10, color:'var(--muted)', marginTop:2 }}>unlocked</div>
               </div>
             </div>
-            <div style={{ marginBottom:12 }}>
-              <div style={{ display:'flex', justifyContent:'space-between',
-                fontSize:10, color:'var(--muted)', marginBottom:5 }}>
-                <span>Progress</span>
-                <span style={{ color:'var(--gold)', fontWeight:600 }}>
-                  {Math.round((data.valamScore - Math.floor(data.valamScore)) * 100)}%
-                </span>
+            {recentMilestones.length > 0 ? (
+              <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:10 }}>
+                {recentMilestones.map(m => (
+                  <div key={m.name} style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <span style={{ fontSize:9, color:'var(--gold)' }}>✓</span>
+                    <span style={{ fontSize:10, color:'var(--text-sm)', lineHeight:1.3 }}>{m.name}</span>
+                  </div>
+                ))}
               </div>
-              <div style={{ height:6, background:'var(--surface2)', borderRadius:4, overflow:'hidden' }}>
-                <div style={{ height:'100%', borderRadius:4,
-                  background:'linear-gradient(90deg,var(--gold),var(--bronze))',
-                  width:`${Math.round((data.valamScore - Math.floor(data.valamScore)) * 100)}%` }}/>
+            ) : (
+              <div style={{ fontSize:10, color:'var(--muted)', lineHeight:1.6, marginBottom:10 }}>
+                Add investments & income to start unlocking milestones.
               </div>
-            </div>
-            <div style={{ fontSize:10, color:'var(--muted)', marginBottom:8, fontWeight:500 }}>
-              Unlock on completion:
-            </div>
-            <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginBottom:12 }}>
-              {['🌱 Blueprint','🗺️ Money Map','💰 First Seed'].map(badge => (
-                <div key={badge} style={{ fontSize:10,
-                  background:'rgba(184,146,74,0.08)',
-                  border:'1px solid rgba(184,146,74,0.2)',
-                  borderRadius:8, padding:'3px 8px', color:'var(--muted)' }}>
-                  {badge}
-                </div>
-              ))}
-            </div>
+            )}
             <div style={{ paddingTop:10, borderTop:'1px solid var(--border)', marginTop:'auto' }}>
-              <span style={{ fontSize:9, background:'rgba(184,146,74,0.1)',
-                color:'var(--gold)', borderRadius:6, padding:'2px 6px', fontWeight:600 }}>
-                REWARD SYSTEM COMING SOON
-              </span>
+              <span style={{ fontSize:11, color:'var(--gold)', fontWeight:600 }}>View All →</span>
             </div>
           </div>
 
@@ -574,39 +709,49 @@ export default function DashboardPage() {
             border:'1px solid var(--border)', display:'flex', flexDirection:'column' }}>
             <div style={{ fontSize:10, color:'var(--muted)', letterSpacing:'.45px',
               textTransform:'uppercase', fontWeight:500, marginBottom:14 }}>Learning</div>
-            {[
-              { emoji:'📘', title:'SIP Basics',        desc:'Learn how SIPs build wealth',  done:true  },
-              { emoji:'📊', title:'Asset Allocation 101', desc:'Diversify like a pro',       done:false },
-              { emoji:'🛡️', title:'Emergency Fund',    desc:'Why 6 months matters',          done:false },
-            ].map((mod, i) => (
-              <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0',
-                borderBottom: i < 2 ? '1px solid rgba(180,155,110,0.08)' : 'none' }}>
-                <div style={{ width:32, height:32, borderRadius:8, flexShrink:0,
-                  background: mod.done
-                    ? 'linear-gradient(135deg,var(--gold),var(--bronze))'
-                    : 'var(--surface2)',
-                  display:'flex', alignItems:'center', justifyContent:'center', fontSize:14 }}>
-                  {mod.emoji}
-                </div>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:12, color:'var(--text)', fontWeight:500,
-                    whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                    {mod.title}
-                  </div>
-                  <div style={{ fontSize:10, color:'var(--muted)', marginTop:1 }}>{mod.desc}</div>
-                </div>
-                <div style={{ fontSize:10, fontWeight:500,
-                  color: mod.done ? 'var(--green)' : 'var(--muted)',
-                  background: mod.done ? 'rgba(74,122,74,0.1)' : 'var(--surface2)',
-                  padding:'2px 8px', borderRadius:8, flexShrink:0 }}>
-                  {mod.done ? '✓' : 'Soon'}
-                </div>
+            {recentLearning.length === 0 ? (
+              <div style={{ fontSize:12, color:'var(--muted)', lineHeight:1.7,
+                padding:'8px 0 4px' }}>
+                Start learning to track your progress.
               </div>
-            ))}
-            <div style={{ marginTop:12, fontSize:9, color:'var(--gold)',
-              fontWeight:600, letterSpacing:'.3px' }}>
-              MORE MODULES COMING →
-            </div>
+            ) : recentLearning.map((item, i) => {
+              const emojis = ['📘', '📗', '📙']
+              const isDone     = item.status === 'completed'
+              const isContinue = item.status === 'continue'
+              return (
+                <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0',
+                  borderBottom: i < recentLearning.length - 1
+                    ? '1px solid rgba(180,155,110,0.08)' : 'none' }}>
+                  <div style={{ width:32, height:32, borderRadius:8, flexShrink:0,
+                    background: isDone
+                      ? 'linear-gradient(135deg,var(--gold),var(--bronze))'
+                      : 'var(--surface2)',
+                    display:'flex', alignItems:'center', justifyContent:'center', fontSize:14 }}>
+                    {emojis[i] ?? '📖'}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:12, color:'var(--text)', fontWeight:500,
+                      whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                      {item.topicName}
+                    </div>
+                  </div>
+                  <div style={{ fontSize:10, fontWeight:500,
+                    color: isDone ? 'var(--green)' : isContinue ? 'var(--gold)' : 'var(--muted)',
+                    background: isDone
+                      ? 'rgba(74,122,74,0.1)'
+                      : isContinue ? 'rgba(184,146,74,0.1)' : 'var(--surface2)',
+                    padding:'2px 8px', borderRadius:8, flexShrink:0 }}>
+                    {isDone ? '✓' : isContinue ? 'Continue' : 'Soon'}
+                  </div>
+                </div>
+              )
+            })}
+            <Link href={`/learning/${currentLevel}`}
+              style={{ marginTop:12, display:'inline-block', fontSize:9,
+                color:'var(--gold)', fontWeight:600, letterSpacing:'.3px',
+                textDecoration:'none' }}>
+              OPEN LEARNING HUB →
+            </Link>
           </div>
 
         </div>
@@ -619,64 +764,51 @@ export default function DashboardPage() {
             <div>
               <div style={{ fontSize:10, color:'var(--muted)', letterSpacing:'.45px',
                 textTransform:'uppercase', fontWeight:500, marginBottom:4 }}>
-                Tasks and Progress Bar to Next Level
+                AI Tasks
               </div>
               <div style={{ fontSize:12, color:'var(--gold)' }}>
-                {data.valamLevelName} → {LEVEL_NAMES_ARR[Math.min(7, currentLevel)]}
+                {roadmap?.task
+                  ? (roadmap.task.nextLevelName
+                      ? `${roadmap.task.currentLevelName} → ${roadmap.task.nextLevelName}`
+                      : roadmap.task.currentLevelName)
+                  : `${data.valamLevelName} → ${LEVEL_NAMES_ARR[Math.min(7, currentLevel)]}`}
               </div>
             </div>
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
               <span style={{ fontSize:9, background:'rgba(184,146,74,0.12)',
                 color:'var(--gold)', borderRadius:8, padding:'2px 8px',
                 fontWeight:600, letterSpacing:'.4px', verticalAlign:'middle' }}>
-                AI-POWERED SOON
+                AI-POWERED
               </span>
               <div style={{ background:'var(--gold)', color:'#fff', fontSize:11,
                 fontWeight:600, padding:'4px 12px', borderRadius:12 }}>
-                Level {data.valamLevel}
+                Level {roadmap?.task?.currentLevel ?? data.valamLevel}
               </div>
             </div>
           </div>
-          <div style={{ display:'flex', justifyContent:'space-between',
-            fontSize:10, color:'var(--muted)', marginBottom:6 }}>
-            <span>Progress to {LEVEL_NAMES_ARR[Math.min(7, currentLevel)]}</span>
-            <span style={{ color:'var(--gold)' }}>
-              {Math.round((data.valamScore - Math.floor(data.valamScore)) * 100)}%
-            </span>
-          </div>
-          <div style={{ height:8, background:'var(--surface2)', borderRadius:4,
-            marginBottom:16, overflow:'hidden' }}>
-            <div style={{ height:'100%',
-              width:`${Math.round((data.valamScore - Math.floor(data.valamScore)) * 100)}%`,
-              background:'linear-gradient(90deg,var(--gold),var(--bronze))', borderRadius:4 }}/>
-          </div>
-          {[
-            { label:'Review your current investment allocation',   done:true  },
-            { label:'Increase monthly SIP contribution',          done:false },
-            { label:'Build 6-month emergency fund',               done:false },
-            { label:'Explore tax-saving investments (ELSS, NPS)', done:false },
-          ].map((task, i) => (
-            <div key={i} style={{ display:'flex', alignItems:'center',
-              justifyContent:'space-between', padding:'8px 0',
-              borderBottom: i < 3 ? '1px solid rgba(180,155,110,0.1)' : 'none' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <div style={{ width:18, height:18, borderRadius:'50%',
-                  background: task.done ? 'var(--gold)' : 'transparent',
-                  border: task.done ? 'none' : '1.5px solid var(--border-md)',
-                  display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                  {task.done && <span style={{ color:'#fff', fontSize:10 }}>✓</span>}
+          {(!roadmap || !roadmap.task) ? (
+            <div style={{ padding:'12px 0' }}>
+              <span style={{ fontSize:12, color:'var(--muted)', lineHeight:1.6 }}>
+                Keep building your financial habits — check back soon for personalized guidance.
+              </span>
+            </div>
+          ) : (
+            <div style={{ paddingTop:4 }}>
+              <div style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom:10 }}>
+                <div style={{ width:18, height:18, borderRadius:'50%', flexShrink:0, marginTop:2,
+                  background:'var(--gold)',
+                  display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <span style={{ color:'#fff', fontSize:10 }}>→</span>
                 </div>
-                <span style={{ fontSize:12, color: task.done ? 'var(--muted)' : 'var(--text)',
-                  textDecoration: task.done ? 'line-through' : 'none' }}>{task.label}</span>
+                <span style={{ fontSize:13, fontWeight:600, color:'var(--text)', lineHeight:1.4 }}>
+                  {roadmap.task.task.title}
+                </span>
               </div>
-              <div style={{ fontSize:10, fontWeight:500,
-                color: task.done ? 'var(--green)' : 'var(--muted)',
-                background: task.done ? 'rgba(74,122,74,0.1)' : 'var(--surface2)',
-                padding:'2px 10px', borderRadius:10 }}>
-                {task.done ? 'Done' : 'Pending'}
+              <div style={{ fontSize:12, color:'var(--muted)', lineHeight:1.6, paddingLeft:28 }}>
+                {roadmap.explanation}
               </div>
             </div>
-          ))}
+          )}
         </div>
 
         {/* ── ROW 3: 3-COL GRID ── */}
@@ -751,10 +883,11 @@ export default function DashboardPage() {
               </div>
             ) : (() => {
               const W = 360, H = 120
-              const sortedDates = [...new Set(investments.map(i => i.date))].sort()
+              const todayStr = new Date().toISOString().slice(0, 10)
+              const sortedDates = [...new Set(investments.map(i => i.date ?? todayStr))].sort()
               const totalByDate = sortedDates.map(d => ({
                 date: d,
-                total: investments.filter(i => i.date <= d).reduce((s, i) => s + i.amount, 0)
+                total: investments.filter(i => (i.date ?? todayStr) <= d).reduce((s, i) => s + i.amount, 0)
               }))
               const maxV = Math.max(...totalByDate.map(p => p.total), 1)
               function toXY(idx: number, total: number): [number, number] {
@@ -816,8 +949,10 @@ export default function DashboardPage() {
           </div>
 
           {/* COL 3: ASSET ALLOCATION */}
-          <div style={{ background:'var(--surface)', borderRadius:18, padding:'18px 20px',
-            border:'1px solid var(--border)', display:'flex', flexDirection:'column' }}>
+          <div onClick={() => router.push('/allocation')}
+            style={{ background:'var(--surface)', borderRadius:18, padding:'18px 20px',
+            border:'1px solid var(--border)', display:'flex', flexDirection:'column',
+            cursor:'pointer' }}>
             <div style={{ fontSize:10, color:'var(--muted)', letterSpacing:'.45px',
               textTransform:'uppercase', fontWeight:500, marginBottom:16 }}>Asset Allocation</div>
             {portfolioByType.length === 0 ? (

@@ -4,73 +4,88 @@ import { calculateLiveSavingsRate } from './savingsRate.js';
 // Must match frontend/app/networth/page.tsx LIABILITY_CATS key list exactly
 const LIABILITY_CATS = ['debt', 'emi', 'other_liability'];
 
-async function getCurrentValue(supabase, userId, category) {
-  if (category === 'networth') {
-    const [nwResult, investResult] = await Promise.all([
-      supabase.from('networth_items').select('amount, category').eq('user_id', userId),
-      supabase.from('investments').select('amount').eq('user_id', userId),
-    ]);
-    const nwItems           = nwResult.data ?? [];
-    const portfolioTotal    = (investResult.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
-    const totalAssets       = nwItems.filter(i => !LIABILITY_CATS.includes(i.category)).reduce((s, i) => s + Number(i.amount), 0);
-    const totalLiabilities  = nwItems.filter(i =>  LIABILITY_CATS.includes(i.category)).reduce((s, i) => s + Number(i.amount), 0);
-    // Matches dashboard/page.tsx formula exactly
-    return portfolioTotal + totalAssets - totalLiabilities;
-  }
+/**
+ * Fetches fresh current values for all milestone categories in one pass.
+ * Returns { networth, investment, income, savings } as numbers.
+ */
+async function getAllCurrentValues(supabase, userId) {
+  const fyStart = getFinancialYearStart();
 
-  if (category === 'investment') {
-    const { data } = await supabase.from('investments').select('amount').eq('user_id', userId);
-    return (data ?? []).reduce((s, d) => s + Number(d.amount), 0);
-  }
+  const [nwResult, investResult, incomeResult, savingsRate] = await Promise.all([
+    supabase.from('networth_items').select('amount, category').eq('user_id', userId),
+    supabase.from('investments').select('amount').eq('user_id', userId),
+    supabase.from('income_entries').select('amount, date').eq('user_id', userId).gte('date', fyStart),
+    calculateLiveSavingsRate(supabase, userId),
+  ]);
 
-  if (category === 'income') {
-    const fyStart = getFinancialYearStart();
-    const { data } = await supabase
-      .from('income_entries')
-      .select('amount, date')
-      .eq('user_id', userId)
-      .gte('date', fyStart);
-    return (data ?? []).reduce((s, d) => s + Number(d.amount), 0);
-  }
+  const portfolioTotal   = (investResult.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
+  const totalAssets      = (nwResult.data ?? []).filter(i => !LIABILITY_CATS.includes(i.category)).reduce((s, i) => s + Number(i.amount), 0);
+  const totalLiabilities = (nwResult.data ?? []).filter(i =>  LIABILITY_CATS.includes(i.category)).reduce((s, i) => s + Number(i.amount), 0);
 
-  if (category === 'savings') {
-    return await calculateLiveSavingsRate(supabase, userId);
-  }
-
-  return 0;
+  return {
+    networth:   portfolioTotal + totalAssets - totalLiabilities,
+    investment: portfolioTotal,
+    income:     (incomeResult.data ?? []).reduce((s, d) => s + Number(d.amount), 0),
+    savings:    savingsRate,
+  };
 }
 
-export async function checkAndUnlockMilestones(supabase, userId, category) {
+/**
+ * Evaluates ALL milestones dynamically against the user's live financial data.
+ * `unlocked` reflects whether the user currently meets the threshold — it is
+ * re-computed on every call and is never permanently cached.
+ *
+ * `unlocked_at` is preserved from the user_milestones table (first time the
+ * threshold was ever crossed) and is written if the milestone is newly met.
+ *
+ * @param {object}   supabase
+ * @param {string}   userId
+ * @param {object[]} allMilestones - Full milestones table rows (id, category, threshold, ...)
+ * @returns {Promise<Map<number, { unlocked: boolean, unlocked_at: string|null }>>}
+ */
+export async function evaluateMilestones(supabase, userId, allMilestones) {
   try {
-    const currentValue = await getCurrentValue(supabase, userId, category);
+    const [currentValues, existingUnlocks] = await Promise.all([
+      getAllCurrentValues(supabase, userId),
+      supabase.from('user_milestones').select('milestone_id, unlocked_at').eq('user_id', userId),
+    ]);
 
-    const { data: candidateMilestones } = await supabase
-      .from('milestones')
-      .select('id, threshold')
-      .eq('category', category)
-      .lte('threshold', currentValue);
+    const unlockedAtMap = new Map(
+      (existingUnlocks.data ?? []).map(u => [u.milestone_id, u.unlocked_at])
+    );
 
-    if (!candidateMilestones || candidateMilestones.length === 0) return [];
+    const result = new Map();
+    const newlyMet = [];
 
-    const { data: alreadyUnlocked } = await supabase
-      .from('user_milestones')
-      .select('milestone_id')
-      .eq('user_id', userId)
-      .in('milestone_id', candidateMilestones.map(m => m.id));
+    for (const m of allMilestones) {
+      const currentVal = currentValues[m.category] ?? 0;
+      const isUnlocked = currentVal >= Number(m.threshold);
 
-    const unlockedIds   = new Set((alreadyUnlocked ?? []).map(u => u.milestone_id));
-    const newlyUnlocked = candidateMilestones.filter(m => !unlockedIds.has(m.id));
+      const existingUnlockedAt = unlockedAtMap.get(m.id) ?? null;
+      let unlockedAt = existingUnlockedAt;
 
-    if (newlyUnlocked.length === 0) return [];
+      if (isUnlocked && !existingUnlockedAt) {
+        // First time this milestone is met — record it
+        const now = new Date().toISOString();
+        newlyMet.push({ user_id: userId, milestone_id: m.id, unlocked_at: now });
+        unlockedAt = now;
+      }
 
-    const inserts = newlyUnlocked.map(m => ({ user_id: userId, milestone_id: m.id }));
-    await supabase
-      .from('user_milestones')
-      .upsert(inserts, { onConflict: 'user_id, milestone_id', ignoreDuplicates: true });
+      result.set(m.id, { unlocked: isUnlocked, unlocked_at: unlockedAt });
+    }
 
-    return newlyUnlocked.map(m => m.id);
+    if (newlyMet.length > 0) {
+      supabase
+        .from('user_milestones')
+        .upsert(newlyMet, { onConflict: 'user_id, milestone_id', ignoreDuplicates: true })
+        .then(({ error }) => {
+          if (error) console.error('[milestoneEngine] Failed to write unlocked_at:', error.message);
+        });
+    }
+
+    return result;
   } catch (err) {
-    console.error(`Milestone check failed for user ${userId}, category ${category}:`, err);
-    return [];
+    console.error('[milestoneEngine] evaluateMilestones failed:', err);
+    return new Map();
   }
 }

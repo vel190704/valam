@@ -351,11 +351,25 @@ export default function PortfolioPage() {
     setSaving(false)
   }
 
-  function handleDuplicate(inv: Investment) {
-    setFormDate('')
-    setFormType(inv.type)
-    setFormAmount(String(inv.amount))
-    setFormNote(inv.note ?? '')
+  async function handleDuplicate(inv: Investment) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+    const res = await fetch(`${BASE}/investments`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ date: new Date().toISOString().slice(0, 10), type: inv.type, amount: inv.amount, note: inv.note ?? undefined }),
+    })
+    if (!res.ok) {
+      const j = await res.json() as { error?: string }
+      setFormError(j.error ?? 'Failed to duplicate investment')
+      return
+    }
+    const j = await res.json() as { investment: Investment }
+    if (j.investment) setInvestments(prev => [j.investment, ...prev])
   }
 
   async function handleDelete(id: string) {

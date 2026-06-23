@@ -101,6 +101,8 @@ export default function AllocationPage() {
   const [valamLevel, setValamLevel] = useState(3)
   const [investments, setInvestments] = useState<Investment[]>([])
   const [risk, setRisk] = useState<RiskLevel>('medium')
+  const [insight, setInsight] = useState<string | null>(null)
+  const [insightLoading, setInsightLoading] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -120,6 +122,51 @@ export default function AllocationPage() {
     }
     load()
   }, [router])
+
+  // ── Stable dep for insight refetch ────────────────────────────────────
+  const totalAmt = investments.reduce((s, i) => s + i.amount, 0)
+
+  // ── Fetch AI allocation insights ──────────────────────────────────────
+  useEffect(() => {
+    if (investments.length === 0) return
+    let cancelled = false
+    async function fetchInsight() {
+      setInsightLoading(true)
+      setInsight(null)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session || cancelled) { setInsightLoading(false); return }
+      const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+      // Compute gaps inline so this effect doesn't depend on the derived `gaps` variable
+      const byType: Record<string, number> = {}
+      for (const inv of investments) byType[inv.type] = (byType[inv.type] ?? 0) + inv.amount
+      const tot = Object.values(byType).reduce((s, v) => s + v, 0) || 1
+      const sugAlloc = getAllocationByRisk(valamLevel, risk)
+      const byLabel: Record<string, number> = {}
+      for (const [t, amt] of Object.entries(byType)) {
+        const lbl = TYPE_TO_SUGGESTED[t]; if (lbl) byLabel[lbl] = (byLabel[lbl] ?? 0) + amt
+      }
+      const gapsPayload = sugAlloc.map(s => ({
+        label: s.label,
+        suggestedPct: s.pct,
+        actualPct: Math.round(((byLabel[s.label] ?? 0) / tot) * 100),
+        delta: Math.round(((byLabel[s.label] ?? 0) / tot) * 100) - s.pct,
+      }))
+      const params = new URLSearchParams({ level: String(valamLevel), risk, gaps: JSON.stringify(gapsPayload) })
+      try {
+        const res = await fetch(`${BASE}/allocation-insights?${params}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        })
+        if (res.ok && !cancelled) {
+          const json = await res.json() as { insight?: string | null }
+          setInsight(json.insight ?? null)
+        }
+      } catch { /* non-fatal */ }
+      if (!cancelled) setInsightLoading(false)
+    }
+    void fetchInsight()
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalAmt, valamLevel, risk])
 
   // ── Compute actual allocation ─────────────────────────────────────────
   const portfolioByType: Record<string, number> = {}
@@ -160,7 +207,6 @@ export default function AllocationPage() {
     return { label: s.label, suggestedPct: s.pct, actualPct, delta, color: s.color }
   })
 
-  const totalAmt = Object.values(portfolioByType).reduce((s, v) => s + v, 0)
   const fmt = (n: number) =>
     n >= 10_00_000 ? `₹${(n / 10_00_000).toFixed(1)}L`
     : n >= 1_000 ? `₹${(n / 1_000).toFixed(0)}K`
@@ -336,6 +382,35 @@ export default function AllocationPage() {
                 <span style={{ color: 'var(--green)', fontWeight: 600 }}>Green</span> = over-allocated ·{' '}
                 <span style={{ color: 'var(--red)', fontWeight: 600 }}>Red</span> = under-allocated vs. suggested
               </div>
+            </div>
+
+            {/* AI Insights */}
+            <div style={{ background: 'var(--surface)', borderRadius: 18,
+              border: '1px solid var(--border)', padding: '20px 22px', marginTop: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
+                  textTransform: 'uppercase', fontWeight: 500 }}>
+                  AI Insights
+                </div>
+                <span style={{ fontSize: 9, background: 'rgba(184,146,74,0.12)',
+                  color: 'var(--gold)', borderRadius: 8, padding: '2px 8px',
+                  fontWeight: 600, letterSpacing: '.4px' }}>
+                  VALAM AI
+                </span>
+              </div>
+              {insightLoading ? (
+                <div style={{ fontSize: 12, color: 'var(--muted)', fontStyle: 'italic' }}>
+                  Analysing your allocation…
+                </div>
+              ) : insight ? (
+                <div style={{ fontSize: 13, color: 'var(--text-sm)', lineHeight: 1.65 }}>
+                  {insight}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                  No insights available right now.
+                </div>
+              )}
             </div>
           </>
         )}

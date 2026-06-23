@@ -5,9 +5,9 @@ import { createClient } from "@supabase/supabase-js";
 import Groq from "groq-sdk";
 import { calculateLiveSavingsRate, calculateMonthlySavingsRate } from "./lib/savingsRate.js";
 import { calculateVALAM } from "./lib/valam.js";
-import { checkAndUnlockMilestones } from "./lib/milestoneEngine.js";
+import { evaluateMilestones } from "./lib/milestoneEngine.js";
 import { determineNextTask } from "./lib/roadmapEngine.js";
-import { generateCoachingExplanation } from "./lib/aiCoach.js";
+import { generateCoachingTasks } from "./lib/aiCoach.js";
 import { getCachedRoadmap, setCachedRoadmap } from "./lib/roadmapCache.js";
 import { getFinancialYearStart } from "./lib/financialYear.js";
 import { Resend } from "resend";
@@ -93,6 +93,57 @@ function amountToIncomeKey(annual) {
   if (annual >= 500000)   return '5L-8L'
   if (annual >= 300000)   return '3L-5L'
   return '<3L'
+}
+
+// ── Context builder helpers ───────────────────────────────────────────────────
+function buildAssetBreakdown(nwItems) {
+  const result = {}
+  const LIABILITY_CATS = new Set(['debt', 'emi', 'other_liability', 'vehicle_loan'])
+  for (const item of nwItems ?? []) {
+    if (!LIABILITY_CATS.has(item.category)) {
+      result[item.category] = (result[item.category] ?? 0) + Number(item.amount)
+    }
+  }
+  return result
+}
+
+function buildInvestmentAllocation(investments) {
+  const totals = {}
+  const grand = investments.reduce((s, r) => s + Number(r.amount), 0)
+  for (const inv of investments) {
+    totals[inv.type] = (totals[inv.type] ?? 0) + Number(inv.amount)
+  }
+  const result = {}
+  for (const [type, amt] of Object.entries(totals)) {
+    result[type] = grand > 0 ? Math.round((amt / grand) * 100) : 0
+  }
+  return result
+}
+
+function getAllocationSuggestion(level) {
+  if (level <= 2) return [
+    { label: 'Emergency Fund', pct: 50 },
+    { label: 'FDs',            pct: 30 },
+    { label: 'Mutual Funds',   pct: 20 },
+  ]
+  if (level <= 4) return [
+    { label: 'Mutual Funds',   pct: 40 },
+    { label: 'FDs',            pct: 25 },
+    { label: 'Stocks',         pct: 20 },
+    { label: 'Emergency Fund', pct: 15 },
+  ]
+  if (level <= 6) return [
+    { label: 'Stocks',       pct: 40 },
+    { label: 'Mutual Funds', pct: 30 },
+    { label: 'Bonds',        pct: 15 },
+    { label: 'Gold',         pct: 15 },
+  ]
+  return [
+    { label: 'Stocks',        pct: 35 },
+    { label: 'International', pct: 25 },
+    { label: 'Alternatives',  pct: 20 },
+    { label: 'Bonds',         pct: 20 },
+  ]
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -202,15 +253,25 @@ async function requireUser(req, res, next) {
     return res.status(401).json({ error: "Missing authorization token" });
   }
 
-  const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Auth timeout')), 5000)
+  );
 
-  if (error || !user) {
-    return res.status(401).json({ error: "Invalid authorization token" });
+  try {
+    const { data: { user }, error } = await Promise.race([
+      supabaseAuth.auth.getUser(token),
+      timeoutPromise,
+    ]);
+    if (error || !user) {
+      return res.status(401).json({ error: "Invalid authorization token" });
+    }
+    req.user  = user;
+    req.token = token;
+    return next();
+  } catch (err) {
+    console.error('[requireUser] auth error:', err.message);
+    return res.status(401).json({ error: "Auth timeout — please retry" });
   }
-
-  req.user  = user;
-  req.token = token;
-  return next();
 }
 
 // ── Health check ──────────────────────────────────────────────────────────────
@@ -563,11 +624,6 @@ app.post("/investments", requireUser, async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message });
 
-  // Fire-and-forget milestone checks (investment affects investment, savings rate, and net worth)
-  void checkAndUnlockMilestones(supabaseAdmin, req.user.id, 'investment');
-  void checkAndUnlockMilestones(supabaseAdmin, req.user.id, 'savings');
-  void checkAndUnlockMilestones(supabaseAdmin, req.user.id, 'networth');
-
   return res.status(201).json({ investment: data });
 });
 
@@ -623,9 +679,6 @@ app.post("/networth", requireUser, async (req, res) => {
       .single();
 
     if (error) return res.status(500).json({ error: error.message });
-
-    // Fire-and-forget milestone check
-    void checkAndUnlockMilestones(supabaseAdmin, req.user.id, 'networth');
 
     return res.status(201).json({ item: data });
   } catch (err) {
@@ -688,10 +741,6 @@ app.post("/income", requireUser, async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message });
 
-  // Fire-and-forget milestone checks (new income affects income total and savings rate denominator)
-  void checkAndUnlockMilestones(supabaseAdmin, req.user.id, 'income');
-  void checkAndUnlockMilestones(supabaseAdmin, req.user.id, 'savings');
-
   return res.status(201).json({ entry: data });
 });
 
@@ -715,19 +764,61 @@ app.get("/milestones", requireUser, async (req, res) => {
     .select('*')
     .order('id');
 
-  const { data: unlocked } = await supabaseAdmin
-    .from('user_milestones')
-    .select('milestone_id, unlocked_at')
-    .eq('user_id', req.user.id);
+  const evalMap = await evaluateMilestones(supabaseAdmin, req.user.id, all ?? []);
 
-  const unlockedMap = new Map((unlocked ?? []).map(u => [u.milestone_id, u.unlocked_at]));
-  const result = (all ?? []).map(m => ({
-    ...m,
-    unlocked:    unlockedMap.has(m.id),
-    unlocked_at: unlockedMap.get(m.id) ?? null,
-  }));
+  const result = (all ?? []).map(m => {
+    const evaluated = evalMap.get(m.id) ?? { unlocked: false, unlocked_at: null };
+    return { ...m, unlocked: evaluated.unlocked, unlocked_at: evaluated.unlocked_at };
+  });
 
-  res.json({ milestones: result, unlockedCount: unlocked?.length ?? 0 });
+  const unlockedCount = result.filter(m => m.unlocked).length;
+  res.json({ milestones: result, unlockedCount });
+});
+
+// ── Allocation Insights ───────────────────────────────────────────────────────
+app.get("/allocation-insights", requireUser, async (req, res) => {
+  try {
+    const { level, risk, gaps } = req.query;
+    if (!level || !risk || !gaps) {
+      return res.status(400).json({ error: 'level, risk, and gaps are required' });
+    }
+
+    let parsedGaps;
+    try {
+      parsedGaps = JSON.parse(gaps);
+    } catch {
+      return res.status(400).json({ error: 'gaps must be valid JSON' });
+    }
+
+    const riskLabel = { low: 'Conservative', medium: 'Balanced', high: 'Aggressive' }[risk] ?? risk;
+
+    const prompt = `You are VALAM AI, a wealth coach for Indian retail investors.
+The user is at Level ${level} with a ${riskLabel} risk profile.
+Their current portfolio has the following gaps vs the suggested allocation:
+
+${parsedGaps.map(g => `${g.label}: actual ${g.actualPct}%, suggested ${g.suggestedPct}%, gap ${g.delta > 0 ? '+' : ''}${g.delta}%`).join('\n')}
+
+Write 2–3 sentences of concise, practical commentary on their allocation gaps.
+- Name the 1–2 biggest gaps and what they mean for their wealth journey
+- Suggest one concrete action (e.g., "redirect your next SIP increase toward X")
+- Use Indian context (SIP, FD, equity mutual funds as categories — never specific fund names)
+- Never mention guaranteed returns or specific % return figures
+Respond in plain text only — no markdown, no bullet points, no preamble.`;
+
+    const response = await groq.chat.completions.create({
+      model:      'llama-3.3-70b-versatile',
+      max_tokens: 256,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const insight = (response.choices?.[0]?.message?.content ?? '').trim();
+    if (!insight) return res.json({ insight: null });
+
+    res.json({ insight });
+  } catch (err) {
+    console.error('[GET /allocation-insights] error:', err.message);
+    res.json({ insight: null });
+  }
 });
 
 // ── Roadmap & AI Coaching ─────────────────────────────────────────────────────
@@ -780,7 +871,20 @@ app.get("/roadmap", requireUser, async (req, res) => {
     const totalInvestedFYR  = (liveInvResultR.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
     const totalIncomeFYR    = (liveIncResultR.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
     const liveSavingsRateR  = totalIncomeFYR > 0 ? (totalInvestedFYR / totalIncomeFYR) * 100 : 0;
-    const annualisedIncomeR = (totalIncomeFYR / monthsElapsedR) * 12;
+    // monthlyIncomeR: FY total ÷ months elapsed (direct — no annualise+de-annualise roundtrip)
+    const monthlyIncomeR    = totalIncomeFYR > 0 ? Math.round(totalIncomeFYR / monthsElapsedR) : 0;
+    // annualisedIncomeR is only used for income bracket key (amountToIncomeKey expects yearly figure)
+    const annualisedIncomeR = monthlyIncomeR * 12;
+
+    // ── DIAGNOSTIC (temporary) ───────────────────────────────────────────────
+    console.log('[roadmap:DIAG] income | user:', req.user.id,
+      '| fyStart:', fyStartR,
+      '| monthsElapsed:', monthsElapsedR,
+      '| totalIncomeFY:', totalIncomeFYR,
+      '| annualisedIncome:', annualisedIncomeR,
+      '| monthlyIncome:', monthlyIncomeR,
+      '| savingsRate:', liveSavingsRateR.toFixed(2) + '%',
+    );
 
     const liveSavingsKeyR = totalIncomeFYR > 0
       ? rateToSavingsKey(liveSavingsRateR)
@@ -790,9 +894,10 @@ app.get("/roadmap", requireUser, async (req, res) => {
       : (profileRow.income ?? '<3L');
 
     // Compute fresh factor scores from live savings/income + stored profile fields
+    let fresh = null;
     let freshFactorScores = null;
     if (profileRow.investments && profileRow.experience && profileRow.age) {
-      const fresh = calculateVALAM({
+      fresh = calculateVALAM({
         age:             Number(profileRow.age),
         income:          liveIncomeKeyR,
         savingsRate:     liveSavingsKeyR,
@@ -816,48 +921,99 @@ app.get("/roadmap", requireUser, async (req, res) => {
       };
     }
 
+    // ── Fetch full context for VALAM AI ──────────────────────────────────────
+    const [invResult, incResult, learningResult] = await Promise.all([
+      supabaseAdmin.from('investments').select('type, amount, date').eq('user_id', req.user.id),
+      supabaseAdmin.from('income_entries').select('source, amount, date').eq('user_id', req.user.id).gte('date', fyStartR),
+      supabaseAdmin.from('learning_progress').select('level, topic_order, status').eq('user_id', req.user.id).eq('status', 'completed'),
+    ]);
+    const totalInvestedAll = (invResult.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
+
+    const LEVEL_NAMES_SRV = ['Seed','Explorer','Builder','Accelerator','Achiever','Wealth Creator','Wealth Architect','Legend'];
+    const currentLevelNum  = fresh?.positionLevel ?? profile.valamLevel ?? 1;
+    // PDF-defined lifetime potential: based purely on age, not VALAM weighted score
+    const age = Number(profileRow.age ?? 25);
+    const agePotentialLevel = age < 40 ? 'Legend' : age <= 70 ? 'Wealth Architect' : 'Wealth Creator';
+    const valamContext = {
+      userProfile: {
+        name:           profile.name,
+        age:            profile.age,
+        goal:           profile.goal,
+        knowledgeLevel: profile.experience,
+        currentLevel:   fresh?.positionLevelName  ?? profile.valamLevelName,
+        nextLevel:      currentLevelNum < 8 ? LEVEL_NAMES_SRV[currentLevelNum] : null,
+        currentScore:   fresh?.positionScore      ?? profile.valamScore,
+        potentialLevel: agePotentialLevel,
+      },
+      financialProfile: {
+        netWorth:         roadmapNetWorth,
+        totalAssets:      totalAssetsR,
+        totalLiabilities: totalLiabilitiesR,
+        assetBreakdown:   buildAssetBreakdown(nwResultR.data),
+        monthlyIncome:          Math.round(monthlyIncomeR),
+        monthlyIncomeFormatted: `₹${(monthlyIncomeR / 100000).toFixed(2)}L`,
+        savingsRate:      Math.round(liveSavingsRateR * 10) / 10,
+        savingsRateScore: freshFactorScores?.sav ?? 0,
+      },
+      portfolioProfile: {
+        totalInvested:    totalInvestedAll,
+        entryCount:       (invResult.data ?? []).length,
+        allocationByType: buildInvestmentAllocation(invResult.data ?? []),
+      },
+      learningProfile: {
+        completedTopics:   (learningResult.data ?? []).length,
+        completedModules:  (learningResult.data ?? [])
+          .map(r => `Level ${r.level} Topic ${r.topic_order}`)
+          .slice(0, 10),
+      },
+      scores: {
+        netWorthScore:      freshFactorScores?.nw  ?? 0,
+        wealthVelocityScore: freshFactorScores?.wv ?? 0,
+        savingsScore:       freshFactorScores?.sav  ?? 0,
+        incomeScore:        freshFactorScores?.inc  ?? 0,
+        knowledgeScore:     freshFactorScores?.exp  ?? 0,
+      },
+      suggestedAllocation: getAllocationSuggestion(fresh?.positionLevel ?? profile.valamLevel ?? 3),
+    };
+
     // learningLevel: experienceScore / 2 → beginner=2→1, learning=4→2, intermediate=6→3, advanced=8→4
     const learningLevel = Math.max(1, Math.min(4, profile.breakdown.experienceScore / 2));
 
-    // 2. Check cache
-    const cached = await getCachedRoadmap(supabaseAdmin, req.user.id);
+    const positionScore   = fresh?.positionScore ?? profile.valamScore;
 
-    // 3. Cache hit: score unchanged → return cached explanation, skip Groq entirely
-    //    Still call determineNextTask() (cheap deterministic math) to reconstruct
-    //    the full task/progress object for the response.
-    if (cached && cached.scoreSnapshot === profile.valamScore) {
+    // 2. Check cache — composite key: positionScore + totalInvested + savingsRate
+    const cached = await getCachedRoadmap(
+      supabaseAdmin, req.user.id,
+      positionScore, totalInvestedAll, liveSavingsRateR,
+    );
+
+    // 3. Cache hit — getCachedRoadmap already validated key match and JSON format
+    if (cached) {
       const roadmapResult = determineNextTask(profile, learningLevel, freshFactorScores);
       return res.json({
-        task:        roadmapResult,
-        tasks:       roadmapResult.tasks,
-        explanation: cached.explanation,
-        source:      "cache",
+        task:   roadmapResult,
+        tasks:  cached.tasks,
+        source: "cache",
       });
     }
 
-    // 4. Cache miss: score changed or first visit — call full pipeline
+    // 4. Cache miss — call Groq for 5 personalised tasks
     const roadmapResult = determineNextTask(profile, learningLevel, freshFactorScores);
+    const { tasks: aiTasks, source } = await generateCoachingTasks(groq, valamContext, roadmapResult.tasks);
 
-    const firstName = (profile.name ?? "").split(" ")[0].trim() || "";
-    const { explanation, source } = await generateCoachingExplanation(groq, roadmapResult, firstName);
-
-    // Persist the new cache entry (await so it's ready for the immediate next request)
     try {
       await setCachedRoadmap(
-        supabaseAdmin,
-        req.user.id,
-        explanation,
-        roadmapResult.task.taskType,
-        profile.valamScore,
+        supabaseAdmin, req.user.id,
+        positionScore, totalInvestedAll, liveSavingsRateR,
+        aiTasks,
       );
     } catch (cacheErr) {
       console.error("[GET /roadmap] Cache write failed (non-fatal):", cacheErr.message);
     }
 
     return res.json({
-      task:        roadmapResult,
-      tasks:       roadmapResult.tasks,
-      explanation,
+      task:   roadmapResult,
+      tasks:  aiTasks,
       source,
     });
   } catch (err) {

@@ -1,19 +1,10 @@
 /**
- * AI coaching explanation layer for VALAM's roadmap feature.
- * Receives a task already decided by roadmapEngine.js and generates a
- * short, grounded coaching explanation via Groq. Never chooses the task —
- * only narrates the one it receives.
+ * AI coaching layer for VALAM — generates 5 personalised tasks via Groq
+ * using the full VALAM context object built in GET /roadmap.
  *
  * Accepts `groqClient` as a parameter — do NOT call new Groq() here.
- * Follows the same shared-client-as-parameter pattern used throughout
- * this codebase (e.g. savingsRate.js passes `supabase` in, not top-level).
  */
 
-/**
- * Safe hardcoded fallbacks per taskType.
- * Returned whenever LLM output fails validation or the Groq call itself errors.
- * One sentence each — short, encouraging, product-name-free.
- */
 const FALLBACKS = {
   increase_investment_consistency:
     'Consistently investing each month is the single most powerful wealth-building habit — keep at it and your VALAM score will reflect your progress soon.',
@@ -23,67 +14,34 @@ const FALLBACKS = {
     'Growing your income opens up more room to save and invest — explore ways to increase your earning potential and watch your financial position strengthen.',
   complete_learning_module:
     'Every learning module you complete strengthens your financial knowledge and directly improves your VALAM Experience Score — keep learning and growing.',
+  build_emergency_fund:
+    'An emergency fund is the bedrock of financial security — without it, any unexpected expense risks derailing your entire wealth plan.',
+  clear_high_interest_debt:
+    'High-interest debt compounds against you every month — clearing it is the highest guaranteed return available to you right now.',
+  get_health_insurance:
+    'Health insurance protects every rupee you have saved — a single medical event without cover can erase years of wealth-building progress.',
+  build_net_worth:
+    'Net worth is the clearest measure of wealth progress — track your assets, reduce liabilities, and widen the gap between them consistently.',
   _default:
     'Keep taking small, consistent steps on your financial journey — every action you take today moves you closer to your next VALAM level.',
 }
 
-/**
- * Regex patterns checked against LLM output (case-insensitive where appropriate).
- * Guards against the model naming specific products despite explicit system prompt
- * instructions. findBannedTerm() returns the first matching pattern for logging.
- */
 const BANNED_PATTERNS = [
-  // Named Indian market indices
-  /\bnifty\b/i,
-  /\bsensex\b/i,
-  /\bbank\s+nifty\b/i,
-  /\bfinnifty\b/i,
-  /\bnifty\s+next\s+50\b/i,
-  /\bmidcap\s+150\b/i,
-  // Specific cryptocurrencies (names and known tickers)
-  /\bbitcoin\b/i,
-  /\bethereum\b/i,
-  /\blitecoin\b/i,
-  /\bdogecoin\b/i,
-  /\bsolana\b/i,
-  /\bripple\b/i,
-  /\bcrypto\b/i,
-  /\bXRP\b/,   // case-sensitive — crypto ticker only appears in all-caps in financial text
-  /\bBTC\b/,
-  /\bETH\b/,
-  /\bBNB\b/,
-  /\bSOL\b/,
-  // AMC name + "fund" — catches "HDFC fund", "SBI Mutual Fund", etc.
-  /\bhdfc\s+(mutual\s+)?fund\b/i,
-  /\bsbi\s+(mutual\s+)?fund\b/i,
-  /\bicici\s+(mutual\s+)?fund\b/i,
-  /\baxis\s+(mutual\s+)?fund\b/i,
+  /\bnifty\b/i, /\bsensex\b/i, /\bbank\s+nifty\b/i,
+  /\bbitcoin\b/i, /\bethereum\b/i, /\bcrypto\b/i,
+  /\bXRP\b/, /\bBTC\b/, /\bETH\b/, /\bBNB\b/, /\bSOL\b/,
+  /\bhdfc\s+(mutual\s+)?fund\b/i, /\bsbi\s+(mutual\s+)?fund\b/i,
+  /\bicici\s+(mutual\s+)?fund\b/i, /\baxis\s+(mutual\s+)?fund\b/i,
   /\bmirae\s+(asset\s+)?(mutual\s+)?fund\b/i,
   /\bnippon\s+(india\s+)?(mutual\s+)?fund\b/i,
-  /\bkotak\s+(mutual\s+)?fund\b/i,
-  /\bdsp\s+(mutual\s+)?fund\b/i,
-  /\baditya\s+birla\s+(sun\s+life\s+)?(mutual\s+)?fund\b/i,
-  /\buti\s+(mutual\s+)?fund\b/i,
-  /\bfranklin\s+(templeton\s+)?(mutual\s+)?fund\b/i,
   /\bparag\s+parikh\s+(mutual\s+)?fund\b/i,
-  /\btata\s+(mutual\s+)?fund\b/i,
-  /\binvesco\s+(mutual\s+)?fund\b/i,
-  // Individual stock tickers (all-caps, word-bounded — these are not common English words)
-  /\b(INFY|WIPRO|HDFCBANK|BAJFINANCE|ASIANPAINT|IRCTC|ZOMATO|PAYTM|RELIANCE|TCS)\b/,
-  // Guaranteed/assured return promises — rulebook explicitly prohibits any guarantee language
-  /\bguaranteed?\s+return[s]?\b/i,
-  /\bguaranteed?\s+\d+(\.\d+)?%/i,
-  /\bassured?\s+return[s]?\b/i,
+  /\b(INFY|WIPRO|HDFCBANK|BAJFINANCE|RELIANCE|TCS)\b/,
+  /\bguaranteed?\s+return[s]?\b/i, /\bassured?\s+return[s]?\b/i,
   /\brisk.?free\s+return[s]?\b/i,
-  /\bcertainly?\s+(to\s+)?(grow|return|profit)\b/i,
-  // Fabricated return/yield figures — catches invented "X% annually/returns/yield/CAGR/p.a."
-  // False-positive risk: current user turn only contains progressToNextLevel% (e.g. "67%")
-  // followed by a period and "Task to focus on:" — never followed by return/yield words, so safe.
   /\b\d+(\.\d+)?%\s*(per\s+annum|p\.?a\.?|annual(ly)?|return[s]?|growth|yield[s]?|cagr)\b/i,
   /\b(return[s]?|yield[s]?|cagr)\s+of\s+\d+(\.\d+)?%\b/i,
 ]
 
-/** Returns the first banned pattern that matches `text`, or null if clean. */
 function findBannedTerm(text) {
   for (const pattern of BANNED_PATTERNS) {
     if (pattern.test(text)) return pattern.toString()
@@ -91,81 +49,171 @@ function findBannedTerm(text) {
   return null
 }
 
-function getFallback(taskType) {
-  return FALLBACKS[taskType] ?? FALLBACKS._default
+const FALLBACK_PADDING = [
+  { title: 'Explore income growth opportunities',    key: 'income_growth_awareness' },
+  { title: 'Complete a financial learning module',   key: 'complete_learning_module' },
+  { title: 'Grow your net worth this month',         key: 'build_net_worth' },
+  { title: 'Review and reduce monthly liabilities',  key: '_default' },
+  { title: 'Strengthen your financial foundations',  key: '_default' },
+]
+
+function buildFallbackTasks(deterministicTasks) {
+  const usedTitles = new Set()
+  const base = deterministicTasks.slice(0, 5).map((t, i) => {
+    usedTitles.add(t.title)
+    return {
+      title:       t.title,
+      explanation: t.detail ?? FALLBACKS[t.taskType] ?? FALLBACKS._default,
+      priority:    i + 1,
+    }
+  })
+  let padIdx = 0
+  while (base.length < 5) {
+    // Find the next padding entry whose title isn't already used
+    while (padIdx < FALLBACK_PADDING.length && usedTitles.has(FALLBACK_PADDING[padIdx].title)) {
+      padIdx++
+    }
+    const pad = FALLBACK_PADDING[padIdx] ?? FALLBACK_PADDING[FALLBACK_PADDING.length - 1]
+    usedTitles.add(pad.title)
+    base.push({
+      title:       pad.title,
+      explanation: FALLBACKS[pad.key] ?? FALLBACKS._default,
+      priority:    base.length + 1,
+    })
+    padIdx++
+  }
+  return base
 }
 
+const SYSTEM_PROMPT = `You are VALAM AI — a personalised wealth coach for Indian retail investors.
+Your job is to generate 5 specific, actionable tasks based on the user's REAL financial data.
+
+RULES (non-negotiable):
+- Never recommend specific stocks, mutual fund names, or securities
+- Never mention guaranteed returns or specific percentage return figures like "12% annually"
+- Frame advice around fixing the weakest foundation first — not maximising wealth
+- Use real numbers from the user's data (₹ amounts, savings rate %, level names, topic counts)
+- Tasks must be specific and measurable (e.g. "Increase your monthly SIP from ₹3,000 to ₹5,000" not "increase SIP")
+- Keep each task explanation to 2 sentences maximum
+- Never frame around maximizing returns — frame around building a strong financial foundation
+- Respect Indian financial context: use SIP, FD, PPF, NPS, ELSS as categories only — never name specific products`
+
 /**
- * Generates a short coaching explanation for a roadmap task using Groq.
- * Never throws — always resolves with a usable string and a source tag.
+ * Generates 5 personalised coaching tasks using the full VALAM context.
+ * Falls back to 3 deterministic tasks (padded to 5) on any Groq failure.
  *
- * @param {import('groq-sdk').Groq} groqClient   - Already-initialized Groq client
- * @param {object}                  roadmapResult - Return value from determineNextTask()
- * @param {string}                 [userFirstName] - User's first name; '' or undefined → "you"
- * @returns {Promise<{ explanation: string, source: 'llm' | 'fallback' }>}
+ * @param {import('groq-sdk').Groq} groqClient
+ * @param {object} valamContext - Full context object from GET /roadmap
+ * @param {object[]} deterministicTasks - 3 tasks from roadmapEngine.determineNextTask()
+ * @returns {Promise<{ tasks: object[], source: 'llm' | 'fallback' }>}
  */
-export async function generateCoachingExplanation(groqClient, roadmapResult, userFirstName) {
-  const { task, currentLevelName, nextLevelName, progressToNextLevel } = roadmapResult
-  const firstName = (userFirstName ?? '').trim()
-  const taskType  = task?.taskType ?? '_default'
+export async function generateCoachingTasks(groqClient, valamContext, deterministicTasks) {
+  const fallback = buildFallbackTasks(deterministicTasks)
 
-  // ── System prompt ─────────────────────────────────────────────────────────
-  const isLevel1 = roadmapResult.currentLevel === 1
+  const { userProfile: up, financialProfile: fp, portfolioProfile: pp, scores } = valamContext
 
-  const allocationRule = task?.allowAllocationDiscussion
-    ? 'When discussing allocation, you may ONLY recommend: (a) asset categories (equity, debt, gold, cash — never named funds or products), (b) allocation ranges or percentages by category, (c) diversification improvements across asset types, or (d) risk management actions such as reducing concentration in a single asset type. Nothing outside these four categories is permitted, even if it sounds like reasonable financial advice. NEVER name specific products, funds, or platforms.'
-    : isLevel1
-      ? 'Do NOT discuss asset allocation, portfolio diversification, or where to invest. Focus your encouragement on building basic investing habits, maintaining or starting a SIP, increasing the savings rate, and reaching first investment milestones — these are the right foundations at the Seed level.'
-      : 'Do NOT discuss asset allocation, portfolio diversification, or where to invest at all. Focus ONLY on the habit or behaviour named in the task — consistency, frequency, or amount.'
+  const userPrompt = `Current User Financial Context:
+${JSON.stringify(valamContext, null, 2)}
 
-  const nameRule = firstName
-    ? `Address the user by their first name: ${firstName}.`
-    : 'Address the user as "you" only — do not invent or guess a name.'
+Suggested asset allocation for ${up.currentLevel}:
+${JSON.stringify(valamContext.suggestedAllocation)}
 
-  const systemPrompt = `You are a financial coaching assistant for VALAM, a premium wealth progression and financial education platform. VALAM is NOT a brokerage, stock recommendation engine, mutual fund advisor, crypto advisor, or returns-maximising trading app. VALAM focuses on building financial habits, improving financial health, and creating long-term wealth through consistent behaviour — not on portfolio performance, investment returns, or picking financial products.
+Deterministic priority tasks identified by the system:
+${deterministicTasks.map((t, i) => `${i + 1}. ${t.title}`).join('\n')}
 
-MOST IMPORTANT: Do NOT frame explanations around maximising wealth, growing a portfolio faster, or achieving higher returns. Frame every explanation around improving the user's weakest financial foundation. The task shown to you was chosen because it is the single biggest bottleneck holding back the user's financial progress — explain it as that, not as a path to more money.
+Generate exactly 5 personalised tasks for this user.
+${up.nextLevel
+  ? `Focus tasks on what this user needs to do to advance from ${up.currentLevel} → ${up.nextLevel}.`
+  : `This user is at the maximum level — focus on maintaining and growing their wealth.`}
+Use their REAL numbers: net worth ₹${fp.netWorth.toLocaleString('en-IN')}, monthly income ${fp.monthlyIncomeFormatted}, savings rate ${fp.savingsRate}%, total invested ₹${pp.totalInvested.toLocaleString('en-IN')}, level ${up.currentLevel}.
 
-RULES — follow ALL of these with no exceptions:
-1. You will be given ONE specific task that has already been decided for the user. Your only job is to write 2–3 short, encouraging sentences explaining why this task matters for their financial progress. You do NOT choose or change the task — it is fixed.
-2. NEVER mention or recommend any specific stock, mutual fund, ETF, cryptocurrency, bond, or named financial product. Do not name indices (e.g. Nifty 50, Sensex), fund houses (e.g. HDFC, SBI, ICICI), tickers, or cryptocurrencies (e.g. Bitcoin, Ethereum).
-3. ${allocationRule}
-4. NEVER invent numbers, percentages, or facts not present in the input you receive. Do not state or imply any specific rate of return, yield, or growth figure.
-5. Keep your total response STRICTLY under 80 words. Use plain encouraging prose only — absolutely no bullet points, headers, or markdown formatting.
-6. ${nameRule}`
+Respond ONLY with a valid JSON array — no markdown fences, no preamble, no trailing text:
+[
+  {
+    "title": "Short action title (max 8 words)",
+    "explanation": "2 sentences using real numbers from their data.",
+    "priority": 1
+  }
+]`
 
-  // ── User turn ─────────────────────────────────────────────────────────────
-  const nextLabel    = nextLevelName ?? 'Legend (highest level)'
-  const userContent  = `User's current VALAM level: ${currentLevelName}. Progress to next level (${nextLabel}): ${progressToNextLevel}%. Task to focus on: "${task?.title ?? 'Build your financial habits'}". Allocation discussion allowed: ${task?.allowAllocationDiscussion ?? false}.`
+  // ── DIAGNOSTIC LOGS (temporary) ──────────────────────────────────────────
+  const MODEL = 'llama-3.3-70b-versatile'
+  console.log('\n[aiCoach:DIAG] ── MODEL ──────────────────────────────')
+  console.log('Model:', MODEL)
+  console.log('System prompt length:', SYSTEM_PROMPT.length, 'chars')
+  console.log('User prompt length:', userPrompt.length, 'chars')
+  console.log('\n[aiCoach:DIAG] ── SYSTEM PROMPT ─────────────────────')
+  console.log(SYSTEM_PROMPT)
+  console.log('\n[aiCoach:DIAG] ── USER PROMPT ────────────────────────')
+  console.log(userPrompt)
+  console.log('\n[aiCoach:DIAG] ── END PROMPTS ────────────────────────\n')
 
-  // ── Groq call with full error handling ───────────────────────────────────
   try {
     const response = await groqClient.chat.completions.create({
-      model:      'openai/gpt-oss-120b',
+      model:      MODEL,
       max_tokens: 1024,
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user',   content: userContent  },
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user',   content: userPrompt    },
       ],
     })
 
     const text = (response.choices?.[0]?.message?.content ?? '').trim()
 
+    // ── DIAGNOSTIC: raw Groq response ────────────────────────────────────
+    console.log('\n[aiCoach:DIAG] ── RAW GROQ RESPONSE ─────────────────')
+    console.log('HTTP status (from error or ok):', response.choices ? 'ok' : 'no choices')
+    console.log('Raw text:', JSON.stringify(text))
+    console.log('[aiCoach:DIAG] ── END RAW RESPONSE ──────────────────\n')
+
     if (!text) {
-      console.error('[aiCoach] Groq returned empty content — using fallback', { taskType })
-      return { explanation: getFallback(taskType), source: 'fallback' }
+      console.error('[aiCoach] Groq returned empty content')
+      return { tasks: fallback, source: 'fallback' }
     }
 
-    // ── Output validation: banned-term guard ─────────────────────────────
-    const banned = findBannedTerm(text)
-    if (banned) {
-      console.warn('[aiCoach] Banned term found in LLM output — using fallback', { banned, taskType, text })
-      return { explanation: getFallback(taskType), source: 'fallback' }
+    // Parse JSON — handle model wrapping in markdown fences
+    let parsed
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      const match = text.match(/\[[\s\S]*\]/)
+      if (match) {
+        try { parsed = JSON.parse(match[0]) }
+        catch { return { tasks: fallback, source: 'fallback' } }
+      } else {
+        console.error('[aiCoach] Could not extract JSON from response')
+        return { tasks: fallback, source: 'fallback' }
+      }
     }
 
-    return { explanation: text, source: 'llm' }
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return { tasks: fallback, source: 'fallback' }
+    }
+
+    // Validate each task — fall back to deterministic entry on any violation
+    const tasks = parsed.slice(0, 5).map((t, i) => {
+      const title       = String(t.title ?? '').trim()
+      const explanation = String(t.explanation ?? '').trim()
+      if (!title || !explanation) return fallback[i]
+      const banned = findBannedTerm(`${title} ${explanation}`)
+      if (banned) {
+        console.warn(`[aiCoach] Banned term in task ${i + 1}:`, banned)
+        return fallback[i]
+      }
+      return { title, explanation, priority: i + 1 }
+    })
+
+    // Pad to 5 if Groq returned fewer
+    while (tasks.length < 5) tasks.push(fallback[tasks.length])
+
+    return { tasks, source: 'llm' }
   } catch (err) {
-    console.error('[aiCoach] Groq API error — using fallback', { message: err.message, taskType })
-    return { explanation: getFallback(taskType), source: 'fallback' }
+    console.error('\n[aiCoach:DIAG] ── GROQ ERROR ──────────────────────')
+    console.error('message:', err.message)
+    console.error('status:', err.status)
+    console.error('code:', err.code)
+    console.error('full error:', JSON.stringify(err, null, 2))
+    console.error('[aiCoach:DIAG] ── END ERROR ──────────────────────\n')
+    return { tasks: fallback, source: 'fallback' }
   }
 }

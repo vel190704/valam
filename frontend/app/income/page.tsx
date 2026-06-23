@@ -304,11 +304,22 @@ export default function IncomePage() {
     setSaving(false)
   }
 
-  function handleDuplicate(e: IncomeEntry) {
-    setFDate('')
-    setFCat(e.source)
-    setFAmount(String(e.amount))
-    setFNote(e.note ?? '')
+  async function handleDuplicate(e: IncomeEntry) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    const today = new Date().toISOString().slice(0, 10)
+    const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+    const res = await fetch(`${BASE}/income`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ date: today, source: e.source, amount: e.amount, note: e.note ?? undefined }),
+    })
+    if (!res.ok) return
+    const json = await res.json() as { entry?: IncomeEntry }
+    if (json.entry) setEntries(prev => [json.entry!, ...prev])
   }
 
   async function handleDelete(id: string) {

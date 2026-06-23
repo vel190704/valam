@@ -216,11 +216,17 @@ export default function NetworthPage() {
     setSubmitting(false)
   }
 
-  function duplicateItem(item: NetworthItem) {
-    setFormCat(item.category)
-    setFormLabel(item.label)
-    setFormAmt(String(item.amount))
-    setFormNote(item.note ?? '')
+  async function duplicateItem(item: NetworthItem) {
+    if (!token) return
+    const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+    const res = await fetch(`${BASE}/networth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ category: item.category, label: item.label, amount: item.amount, note: item.note ?? undefined }),
+    })
+    if (!res.ok) return
+    const json = await res.json() as { item: NetworthItem }
+    setItems(prev => [...prev, json.item])
   }
 
   async function deleteItem(id: string) {

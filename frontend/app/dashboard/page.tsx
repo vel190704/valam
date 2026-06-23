@@ -63,10 +63,16 @@ interface RoadmapTaskResult {
   progressToNextLevel: number
 }
 
+interface AiTaskEntry {
+  title: string
+  explanation: string
+  priority: number
+}
+
 interface RoadmapResponse {
   task: RoadmapTaskResult | null
-  tasks?: RoadmapTaskEntry[]
-  explanation: string
+  tasks?: (RoadmapTaskEntry | AiTaskEntry)[]
+  explanation?: string
   source: 'llm' | 'cache' | 'fallback' | 'error'
 }
 
@@ -962,13 +968,9 @@ export default function DashboardPage() {
                 AI Tasks
               </div>
               <div style={{ fontSize: 12, color: 'var(--gold)' }}>
-                {roadmap?.task
-                  ? (roadmap.task.nextLevelName
-                    ? `${roadmap.task.currentLevelName} → ${roadmap.task.nextLevelName}`
-                    : roadmap.task.currentLevelName)
-                  : (liveLevel < 8
-                    ? `${liveLevelName} → ${LEVEL_NAMES_ARR[liveLevel]}`
-                    : liveLevelName)}
+                {liveLevel < 8
+                  ? `${liveLevelName} → ${LEVEL_NAMES_ARR[liveLevel]}`
+                  : liveLevelName}
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -995,13 +997,13 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div style={{ paddingTop: 4 }}>
-              {(roadmap.tasks ?? roadmap.task.tasks ?? [roadmap.task.task]).map((t, idx) => (
-                <div key={t.rank ?? idx}
+              {(roadmap.tasks ?? roadmap.task?.tasks ?? [roadmap.task?.task]).filter(Boolean).map((t, idx, arr) => (
+                <div key={(t as {rank?: number; title?: string}).rank ?? idx}
                   style={{
                     display: 'flex', alignItems: 'flex-start', gap: 10,
-                    marginBottom: idx < 2 ? 14 : 0,
-                    paddingBottom: idx < 2 ? 14 : 0,
-                    borderBottom: idx < 2 ? '1px solid var(--border)' : 'none'
+                    marginBottom: idx < arr.length - 1 ? 14 : 0,
+                    paddingBottom: idx < arr.length - 1 ? 14 : 0,
+                    borderBottom: idx < arr.length - 1 ? '1px solid var(--border)' : 'none'
                   }}>
                   <div style={{
                     width: 20, height: 20, borderRadius: '50%', flexShrink: 0, marginTop: 1,
@@ -1017,18 +1019,13 @@ export default function DashboardPage() {
                     <div style={{
                       fontSize: idx === 0 ? 13 : 12, fontWeight: idx === 0 ? 600 : 500,
                       color: idx === 0 ? 'var(--text)' : 'var(--text-sm)', lineHeight: 1.4,
-                      marginBottom: (idx === 0 && roadmap.explanation) || (idx > 0 && t.detail) ? 5 : 0
+                      marginBottom: (t as {explanation?: string; detail?: string}).explanation || (t as {detail?: string}).detail ? 5 : 0
                     }}>
-                      {t.title}
+                      {(t as {title: string}).title}
                     </div>
-                    {idx === 0 && roadmap.explanation && (
-                      <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
-                        {roadmap.explanation}
-                      </div>
-                    )}
-                    {idx > 0 && t.detail && (
-                      <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.55 }}>
-                        {t.detail}
+                    {((t as {explanation?: string}).explanation || (t as {detail?: string}).detail) && (
+                      <div style={{ fontSize: idx === 0 ? 12 : 11, color: 'var(--muted)', lineHeight: 1.6 }}>
+                        {(t as {explanation?: string}).explanation ?? (t as {detail?: string}).detail}
                       </div>
                     )}
                   </div>

@@ -12,12 +12,20 @@ export type InvestmentsKey =
 export type ExperienceKey =
   | 'beginner' | 'learning' | 'intermediate' | 'advanced'
 
+export type EmergencyFundKey    = 'none' | '1-2months' | '3-6months' | '6months+'
+export type HighInterestDebtKey = 'none' | 'some' | 'significant'
+export type HealthInsuranceKey  = 'yes' | 'no'
+
 export interface VALAMInput {
-  age:         number
-  income:      IncomeKey
-  savingsRate: SavingsKey
-  investments: InvestmentsKey
-  experience:  ExperienceKey
+  age:               number
+  income:            IncomeKey
+  savingsRate:       SavingsKey
+  investments:       InvestmentsKey   // kept for fallback when netWorth is absent
+  experience:        ExperienceKey
+  netWorth?:         number | null    // actual rupee net worth from networth_items
+  emergencyFund?:    EmergencyFundKey | null
+  highInterestDebt?: HighInterestDebtKey | null
+  healthInsurance?:  HealthInsuranceKey | null
 }
 
 export interface VALAMResult {
@@ -28,12 +36,14 @@ export interface VALAMResult {
   potentialLevel:     number
   potentialLevelName: string
   breakdown: {
-    wealthVelocityScore: number
-    savingsScore:        number
-    incomeScore:         number
-    experienceScore:     number
-    ageScore:            number
-    wealthVelocity:      number
+    netWorthScore:        number
+    wealthVelocityScore:  number
+    savingsScore:         number
+    incomeScore:          number
+    experienceScore:      number
+    ageScore:             number
+    wealthVelocity:       number
+    financialHealthScore: number  // kept for task engine FH override
   }
 }
 
@@ -59,25 +69,46 @@ export const LEVEL_MESSAGES: Record<number, string> = {
   8: "You've reached an elite level of wealth creation and financial discipline.",
 }
 
-function getLevel(score: number): number {
-  if (score < 2.0) return 1
-  if (score < 3.0) return 2
-  if (score < 4.0) return 3
-  if (score < 5.0) return 4
-  if (score < 6.0) return 5
-  if (score < 7.0) return 6
-  if (score < 7.5) return 7
+// PDF level boundaries: 1.00-1.99=L1 … 7.00-7.49=L7, 7.50-8.00=L8
+function scoreToLevel(score: number): number {
+  if (score >= 7.50) return 8
+  return Math.floor(score)
+}
+
+// ── Net Worth score (PDF brackets) ──────────────────────────────────────────
+export function scoreNetWorth(nw: number): number {
+  if (nw < 0)            return 1
+  if (nw < 50_000)       return 2
+  if (nw < 2_00_000)     return 3
+  if (nw < 10_00_000)    return 4
+  if (nw < 25_00_000)    return 5
+  if (nw < 50_00_000)    return 6
+  if (nw < 1_00_00_000)  return 7
+  return 8
+}
+
+// ── Wealth Velocity score: NetWorth ÷ Age (PDF brackets) ────────────────────
+export function scoreWealthVelocityFromNetWorth(nw: number, age: number): number {
+  const v = age > 0 ? nw / age : 0
+  if (v < 5_000)      return 1
+  if (v < 25_000)     return 2
+  if (v < 50_000)     return 3
+  if (v < 1_00_000)   return 4
+  if (v < 2_00_000)   return 5
+  if (v < 5_00_000)   return 6
+  if (v < 10_00_000)  return 7
   return 8
 }
 
 const INVESTMENT_MIDPOINTS: Record<InvestmentsKey, number> = {
-  '<10k':   5000,
-  '10k-1L': 55000,
-  '1L-5L':  300000,
-  '5L-25L': 1500000,
-  '25L+':   3000000,
+  '<10k':   5_000,
+  '10k-1L': 55_000,
+  '1L-5L':  3_00_000,
+  '5L-25L': 15_00_000,
+  '25L+':   30_00_000,
 }
 
+// Legacy WV brackets (investment midpoint ÷ age) — used in fallback only
 function scoreWealthVelocity(v: number): number {
   if (v < 1000)    return 1
   if (v < 5000)    return 2
@@ -123,19 +154,57 @@ function scoreAge(age: number): number {
   return 1
 }
 
-export function calculateVALAM(input: VALAMInput): VALAMResult {
-  const investmentAmt       = INVESTMENT_MIDPOINTS[input.investments]
-  const wealthVelocity      = investmentAmt / input.age
-  const wealthVelocityScore = scoreWealthVelocity(wealthVelocity)
-  const savingsScore        = scoreSavings(input.savingsRate)
-  const incomeScore         = scoreIncome(input.income)
-  const experienceScore     = scoreExperience(input.experience)
-  const ageScore            = scoreAge(input.age)
+export function scoreFinancialHealth(
+  ef:        EmergencyFundKey    | null | undefined,
+  debt:      HighInterestDebtKey | null | undefined,
+  insurance: HealthInsuranceKey  | null | undefined,
+): number {
+  if (!ef && !debt && !insurance) return 4
+  let score = 4
+  if (ef === '3-6months' || ef === '6months+') score += 2
+  if (ef === 'none') score -= 1
+  if (insurance === 'yes') score += 1
+  if (debt === 'significant') score -= 2
+  if (debt === 'some') score -= 1
+  return Math.max(1, Math.min(8, score))
+}
 
+export function calculateVALAM(input: VALAMInput): VALAMResult {
+  const savingsScore         = scoreSavings(input.savingsRate)
+  const incomeScore          = scoreIncome(input.income)
+  const experienceScore      = scoreExperience(input.experience)
+  const ageScore             = scoreAge(input.age)
+  const financialHealthScore = scoreFinancialHealth(
+    input.emergencyFund    ?? null,
+    input.highInterestDebt ?? null,
+    input.healthInsurance  ?? null,
+  )
+
+  let netWorthScore:      number
+  let wealthVelocityScore: number
+  let wealthVelocity:     number
+
+  if (input.netWorth !== undefined && input.netWorth !== null) {
+    // PDF formula: real net worth data available
+    netWorthScore       = scoreNetWorth(input.netWorth)
+    wealthVelocityScore = scoreWealthVelocityFromNetWorth(input.netWorth, input.age)
+    wealthVelocity      = input.age > 0 ? Math.round(input.netWorth / input.age) : 0
+  } else {
+    // Fallback: no net worth data yet — use investment bracket midpoint for WV
+    const investmentAmt = INVESTMENT_MIDPOINTS[input.investments] ?? 5_000
+    const rawVelocity   = input.age > 0 ? investmentAmt / input.age : 0
+    wealthVelocityScore = scoreWealthVelocity(rawVelocity)
+    netWorthScore       = 2  // neutral: treat as ₹0 net worth (0–50k bracket)
+    wealthVelocity      = Math.round(rawVelocity)
+  }
+
+  // PDF position formula:
+  //   0.30×NetWorth + 0.30×WealthVelocity + 0.20×Savings + 0.10×Income + 0.10×Knowledge
   const rawPosition =
-    0.50 * wealthVelocityScore +
-    0.25 * savingsScore +
-    0.15 * incomeScore +
+    0.30 * netWorthScore +
+    0.30 * wealthVelocityScore +
+    0.20 * savingsScore +
+    0.10 * incomeScore +
     0.10 * experienceScore
 
   const rawPotential =
@@ -146,8 +215,8 @@ export function calculateVALAM(input: VALAMInput): VALAMResult {
 
   const positionScore  = Math.round(rawPosition  * 100) / 100
   const potentialScore = Math.round(rawPotential * 100) / 100
-  const positionLevel  = getLevel(positionScore)
-  const potentialLevel = getLevel(potentialScore)
+  const positionLevel  = scoreToLevel(positionScore)
+  const potentialLevel = scoreToLevel(potentialScore)
 
   return {
     positionScore,
@@ -157,12 +226,14 @@ export function calculateVALAM(input: VALAMInput): VALAMResult {
     potentialLevel,
     potentialLevelName: LEVEL_NAMES[potentialLevel],
     breakdown: {
+      netWorthScore,
       wealthVelocityScore,
       savingsScore,
       incomeScore,
       experienceScore,
       ageScore,
-      wealthVelocity: Math.round(wealthVelocity),
+      wealthVelocity,
+      financialHealthScore,
     },
   }
 }

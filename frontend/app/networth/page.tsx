@@ -22,6 +22,7 @@ const ASSET_CATS: { key: string; label: string; color: string }[] = [
 const LIABILITY_CATS: { key: string; label: string; color: string }[] = [
   { key: 'debt',            label: 'Loan / Debt',       color: '#E74C3C' },
   { key: 'emi',             label: 'EMI Outstanding',   color: '#C0392B' },
+  { key: 'vehicle_loan',    label: 'Vehicle Loan',      color: '#D35400' },
   { key: 'other_liability', label: 'Other Liability',   color: '#E07B54' },
 ]
 const ALL_CATS = [...ASSET_CATS, ...LIABILITY_CATS]
@@ -164,8 +165,6 @@ export default function NetworthPage() {
   const [loading, setLoading]     = useState(true)
   const [userId, setUserId]       = useState<string | null>(null)
   const [token, setToken]         = useState<string | null>(null)
-  const [dark, setDark]           = useState(false)
-
   // form state
   const [formCat,    setFormCat]    = useState('cash')
   const [formLabel,  setFormLabel]  = useState('')
@@ -194,10 +193,6 @@ export default function NetworthPage() {
       load(session.access_token)
     })
   }, [router, load])
-
-  useEffect(() => {
-    document.body.classList.toggle('dark', dark)
-  }, [dark])
 
   const totalAssets      = items.filter(i => !LIABILITY_KEYS.has(i.category)).reduce((s, i) => s + i.amount, 0)
   const totalLiabilities = items.filter(i =>  LIABILITY_KEYS.has(i.category)).reduce((s, i) => s + i.amount, 0)
@@ -279,10 +274,7 @@ export default function NetworthPage() {
         button { cursor: pointer; font-family: inherit; border: none; }
       `}</style>
 
-      {/* NAV */}
-          <DNavbar
-      activeTab="Net Worth"
-      />
+      <DNavbar activeTab="Net Worth" />
 
       <div style={{ maxWidth: 680, margin: '0 auto', padding: '20px 16px 80px' }}>
 

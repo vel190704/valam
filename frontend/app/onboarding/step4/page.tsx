@@ -1,8 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { useEffect } from 'react'
 
 const goals = [
   { id:1, value:'emergency',  icon:'🌱', title:'Build My Foundation',
@@ -23,20 +22,24 @@ export default function Step4() {
   const router = useRouter()
   const [selectedGoal, setSelectedGoal] = useState('')
 
-    useEffect(() =>{
-      async function precheck(){
-        const{data:{session}} = await supabase.auth.getSession()
-        if(!session?.user){
-          return
-        }
-        const{data:profile} = await supabase.from('profiles').select('onboarded').eq('user_id',session.user.id).maybeSingle()
-        if(profile?.onboarded){
-          router.replace('/dashboard')
-          return
-        }
+  useEffect(() => {
+    async function precheck() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) return
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('onboarded')
+        .eq('user_id', session.user.id)
+        .maybeSingle()
+
+      if (profile?.onboarded) {
+        router.replace('/dashboard')
+        return
       }
-      precheck()
-    },[])
+    }
+    void precheck()
+  }, [router])
 
   function handleCalculate() {
     if (!selectedGoal) return

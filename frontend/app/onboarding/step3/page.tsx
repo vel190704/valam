@@ -1,9 +1,8 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { PostgrestFilterBuilder } from '@supabase/supabase-js'
+
 const incomeOptions = [
   { value:'<3L',     label:'Below ₹3L / year' },
   { value:'3L-5L',   label:'₹3L – ₹5L / year' },
@@ -48,20 +47,24 @@ export default function Step3() {
   const [savings, setSavings]         = useState('')
   const [investments, setInvestments] = useState('')
 
-  useEffect(() =>{
-    async function precheck(){
-      const{data:{session}} = await supabase.auth.getSession()
-      if(!session?.user){
-        return
-      }
-      const{data:profile} = await supabase.from('profiles').select('onboarded').eq('user_id',session.user.id).maybeSingle()
-      if(profile?.onboarded){
+  useEffect(() => {
+    async function precheck() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) return
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('onboarded')
+        .eq('user_id', session.user.id)
+        .maybeSingle()
+
+      if (profile?.onboarded) {
         router.replace('/dashboard')
         return
       }
     }
-    precheck()
-  },[])
+    void precheck()
+  }, [router])
 
   function handleContinue() {
     if (!income || !savings || !investments) return
@@ -90,7 +93,7 @@ export default function Step3() {
 
         <h2 style={{ fontFamily:"'Playfair Display', serif", fontSize:'1.8rem',
           color:'#2a1a0e', marginBottom:'8px', textAlign:'center' }}>
-          We&apos;ll tailor your financial roadmap based on your investing knowledge
+          We'll tailor your financial roadmap based on your investing knowledge
         </h2>
         <p style={{ fontFamily:"'Cormorant Garamond', serif", color:'#5a3e28',
           textAlign:'center', marginBottom:'40px' }}>
@@ -125,7 +128,7 @@ export default function Step3() {
             cursor: ready?'pointer':'not-allowed',
             fontFamily:'Inter, sans-serif', fontWeight:700,
             fontSize:'1rem', color:'#2a1a0e', marginBottom:'16px' }}>
-          Continue
+          Continue→
         </button>
 
         <div style={{ textAlign:'center' }}>

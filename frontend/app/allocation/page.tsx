@@ -1,16 +1,38 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { getAllocationByRisk, TYPE_TO_SUGGESTED, type RiskLevel } from '@/lib/allocation'
+import {
+  getSuggestedAllocation,
+  getSuggestedEquityAllocation,
+  TYPE_TO_CATEGORY,
+  MF_TO_EQUITY_CATEGORY,
+  type RiskLevel
+} from '@/lib/allocation'
 import DNavbar from '@/components/layout/dnavbar'
 
 // ── Types ──────────────────────────────────────────────────────────────────
+type InvestmentType = 'mf' | 'stock' | 'fd' | 'crypto' | 'bond' | 'etf'|'commodity'
+type MutualFundType =
+  | 'largecap'
+  | 'midcap'
+  | 'smallcap'
+  | 'nifty50'
+  | 'flexicap'
+  | 'international'
+  | 'debt'
+  | 'commodity'
 interface Investment {
   id: string
-  type: string
-  amount: number
   date?: string
+
+  type: InvestmentType
+
+  mfType?: MutualFundType
+
+  amount: number
+
   note?: string
 }
 
@@ -102,6 +124,8 @@ export default function AllocationPage() {
   const [investments, setInvestments] = useState<Investment[]>([])
   const [risk, setRisk] = useState<RiskLevel>('medium')
   const[dark,setDark] = useState(false);
+  const [age, setAge] = useState(0);
+  const [valamLevelName, setValamLevelName] = useState('')
 
     useEffect(() => {
       async function darc(){
@@ -130,53 +154,232 @@ darc()
       if (!res.ok) { setError('Failed to load data'); setLoading(false); return }
 
       const json = await res.json()
+      setAge(json.profile?.age ?? 0)
       setValamLevel(json.profile?.valamLevel ?? 3)
-      setInvestments(json.investments ?? [])
       setLoading(false)
+      setValamLevelName(json.profile?.valam_level_name ?? json.profile?.valamLevelName ?? '')
     }
     load()
   }, [router])
 
+  const loadInvestments = useCallback(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) { setLoading(false); return }
+  
+      const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+      const res = await fetch(`${BASE}/investments`, {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      })
+      if (res.ok) {
+        const json = await res.json() as { investments: Investment[] }
+        setInvestments(json.investments ?? [])
+      }
+      setLoading(false)
+  }, [])
+
+  useEffect(() => {
+  async function init() {
+    await loadInvestments()
+  }
+
+  init()
+}, [loadInvestments])
+  
+
   // ── Compute actual allocation ─────────────────────────────────────────
-  const portfolioByType: Record<string, number> = {}
-  for (const inv of investments) {
-    portfolioByType[inv.type] = (portfolioByType[inv.type] ?? 0) + inv.amount
-  }
-  const total = Object.values(portfolioByType).reduce((s, v) => s + v, 0) || 1
+  const portfolioByCategory = {
+  Equity: 0,
+  Debt: 0,
+  Commodity: 0,
+}
 
-  const TYPE_COLORS: Record<string, string> = {
-    mf: '#B8924A', stock: '#5B8DB8', fd: '#E07B54',
-    crypto: '#9B59B6', bond: '#27AE60', etf: '#16A085', realestate: '#C0392B',
-  }
-  const TYPE_LABELS: Record<string, string> = {
-    mf: 'Mutual Funds', stock: 'Stocks', fd: 'FDs',
-    crypto: 'Crypto', bond: 'Bonds', etf: 'ETFs', realestate: 'Real Estate',
-  }
+const mfByCategory = {
+  Index: 0,
+  Flexi: 0,
+  Mid: 0,
+  Small: 0,
+}
 
-  const actualSlices = Object.entries(portfolioByType).map(([type, amt]) => ({
-    label: TYPE_LABELS[type] ?? type,
-    pct: Math.round((amt / total) * 100),
-    color: TYPE_COLORS[type] ?? '#888',
-  }))
+for (const inv of investments) {
 
-  const suggested: AllocationItem[] = getAllocationByRisk(valamLevel, risk)
+  if (inv.type !== 'mf') continue
+
+  const category =
+    MF_TO_EQUITY_CATEGORY[inv.mfType ?? '']
+
+  if (!category) continue
+
+  mfByCategory[
+    category as keyof typeof mfByCategory
+  ] += inv.amount
+}
+
+const totalMF =
+  Object.values(mfByCategory)
+    .reduce((a, b) => a + b, 0)
+
+    const actualEquitySlices =
+  totalMF === 0
+    ? []
+    : [
+        {
+          label: 'Index',
+          pct: Math.round(
+            (mfByCategory.Index / totalMF) * 100
+          ),
+          color: '#5B8DB8',
+        },
+        {
+          label: 'Flexi',
+          pct: Math.round(
+            (mfByCategory.Flexi / totalMF) * 100
+          ),
+          color: '#27AE60',
+        },
+        {
+          label: 'Mid',
+          pct: Math.round(
+            (mfByCategory.Mid / totalMF) * 100
+          ),
+          color: '#B8924A',
+        },
+        {
+          label: 'Small',
+          pct: Math.round(
+            (mfByCategory.Small / totalMF) * 100
+          ),
+          color: '#DBA512',
+        },
+      ].filter(x => x.pct > 0)
+
+      const suggestedEquity =
+  getSuggestedEquityAllocation(
+    valamLevelName
+  )
+
+  const actualEquityByLabel = {
+  Index:
+    totalMF === 0
+      ? 0
+      : Math.round(
+          (mfByCategory.Index / totalMF) * 100
+        ),
+
+  Flexi:
+    totalMF === 0
+      ? 0
+      : Math.round(
+          (mfByCategory.Flexi / totalMF) * 100
+        ),
+
+  Mid:
+    totalMF === 0
+      ? 0
+      : Math.round(
+          (mfByCategory.Mid / totalMF) * 100
+        ),
+
+  Small:
+    totalMF === 0
+      ? 0
+      : Math.round(
+          (mfByCategory.Small / totalMF) * 100
+        ),
+}
+
+const equityGaps =
+  suggestedEquity.map(s => {
+
+    const actualPct =
+      actualEquityByLabel[
+        s.label as keyof typeof actualEquityByLabel
+      ] ?? 0
+
+    const delta =
+      actualPct - s.pct
+
+    return {
+      label: s.label,
+      suggestedPct: s.pct,
+      actualPct,
+      delta,
+      balanced:
+        Math.abs(delta) <= 5,
+      color: s.color,
+    }
+  })
+
+for (const inv of investments) {
+  const category = TYPE_TO_CATEGORY[inv.type]
+
+  if (category) {
+    portfolioByCategory[category] += inv.amount
+  }
+}
+  const total = Object.values(portfolioByCategory).reduce((s, v) => s + v, 0) || 1
+
+  const actualSlices = [
+  {
+    label: 'Equity',
+    pct: Math.round(
+      (portfolioByCategory.Equity / total) * 100
+    ),
+    color: '#5B8DB8',
+  },
+  {
+    label: 'Debt',
+    pct: Math.round(
+      (portfolioByCategory.Debt / total) * 100
+    ),
+    color: '#27AE60',
+  },
+  {
+    label: 'Commodity',
+    pct: Math.round(
+      (portfolioByCategory.Commodity / total) * 100
+    ),
+    color: '#DBA512',
+  },
+]
+
+  const suggested: AllocationItem[] = getSuggestedAllocation(age, risk)
 
   // ── Gap analysis ──────────────────────────────────────────────────────
   // Compute actual % by suggested label (using TYPE_TO_SUGGESTED mapping)
-  const actualByLabel: Record<string, number> = {}
-  for (const [type, amt] of Object.entries(portfolioByType)) {
-    const label = TYPE_TO_SUGGESTED[type]
-    if (label) actualByLabel[label] = (actualByLabel[label] ?? 0) + amt
-  }
+  const actualByLabel = {
+  Equity: Math.round(
+    (portfolioByCategory.Equity / total) * 100),
+
+  Debt: Math.round(
+    (portfolioByCategory.Debt / total) * 100),
+
+  Commodity: Math.round(
+    (portfolioByCategory.Commodity / total) * 100),
+}
 
   const gaps = suggested.map(s => {
-    const actualAmt = actualByLabel[s.label] ?? 0
-    const actualPct = Math.round((actualAmt / total) * 100)
-    const delta = actualPct - s.pct
-    return { label: s.label, suggestedPct: s.pct, actualPct, delta, color: s.color }
-  })
 
-  const totalAmt = Object.values(portfolioByType).reduce((s, v) => s + v, 0)
+  const actualPct =
+    actualByLabel[
+      s.label as keyof typeof actualByLabel
+    ] ?? 0
+
+  const delta = actualPct - s.pct
+
+  const balanced =
+    Math.abs(delta) <= 10
+
+  return {
+    label: s.label,
+    suggestedPct: s.pct,
+    actualPct,
+    delta,
+    balanced,
+    color: s.color,
+  }
+})
+
+  const totalAmt = Object.values(portfolioByCategory).reduce((s, v) => s + v, 0)
   const fmt = (n: number) =>
     n >= 10_00_000 ? `₹${(n / 10_00_000).toFixed(1)}L`
     : n >= 1_000 ? `₹${(n / 1_000).toFixed(0)}K`
@@ -208,7 +411,7 @@ darc()
         {/* Level badge */}
         <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 20 }}>
           Suggestions are tailored for{' '}
-          <span style={{ color: 'var(--gold)', fontWeight: 700 }}>Level {valamLevel}</span>
+          <span style={{ color: 'var(--gold)', fontWeight: 700 }}></span>
           {' '}investors · Portfolio total{' '}
           <span style={{ color: 'var(--text)', fontWeight: 600 }}>{fmt(totalAmt)}</span>
         </div>
@@ -276,7 +479,6 @@ darc()
                 </span>
               </div>
             </div>
-
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
               {/* Actual donut */}
               <div style={{ background: 'var(--surface)', borderRadius: 18,
@@ -339,11 +541,107 @@ darc()
                   </span>
                   <span style={{
                     fontSize: 12, fontWeight: 700, textAlign: 'right',
-                    color: g.delta === 0 ? 'var(--muted)'
-                         : g.delta > 0 ? 'var(--green)'
-                         : 'var(--red)',
+                    color:
+  g.balanced
+    ? 'var(--muted)'
+    : g.delta > 0
+    ? 'var(--green)'
+    : 'var(--red)',
                   }}>
-                    {g.delta === 0 ? '—' : g.delta > 0 ? `+${g.delta}%` : `${g.delta}%`}
+                   {
+    g.balanced
+      ? 'Balanced'
+      : g.delta > 0
+      ? `+${g.delta}%`
+      : `${g.delta}%`
+  }
+                  </span>
+                </div>
+              ))}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+              {/* Actual donut */}
+              <div style={{ background: 'var(--surface)', borderRadius: 18,
+                border: '1px solid var(--border)', padding: '20px 16px' }}>
+                <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
+                  textTransform: 'uppercase', fontWeight: 500, marginBottom: 16 }}>
+                  EQUITY DISTRIBUTION
+                </div>
+                {actualEquitySlices.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>No data</div>
+                ) : (
+                  <Donut slices={actualEquitySlices} label="Actual" total={fmt(totalMF)} />
+                )}
+              </div>
+
+              {/* Suggested donut */}
+              <div style={{ background: 'var(--surface)', borderRadius: 18,
+                border: '1px solid var(--border)', padding: '20px 16px' }}>
+                <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
+                  textTransform: 'uppercase', fontWeight: 500, marginBottom: 16 }}>
+                  Suggested · Level {valamLevelName}
+                </div>
+                <Donut slices={suggestedEquity} label="Target" total="Ideal mix" />
+              </div>
+            </div>
+
+            {/* Gap analysis table */}
+            <div style={{ background: 'var(--surface)', borderRadius: 18,
+              border: '1px solid var(--border)', padding: '20px 22px' }}>
+              <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
+                textTransform: 'uppercase', fontWeight: 500, marginBottom: 16 }}>
+                Equity Gap Analysis
+              </div>
+
+              {/* Header */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px 80px',
+                gap: 8, paddingBottom: 8, borderBottom: '1px solid var(--border)',
+                fontSize: 9, color: 'var(--muted)', fontWeight: 600,
+                letterSpacing: '.4px', textTransform: 'uppercase' }}>
+                <span>Category</span>
+                <span style={{ textAlign: 'right' }}>Suggested</span>
+                <span style={{ textAlign: 'right' }}>Actual</span>
+                <span style={{ textAlign: 'right' }}>Gap</span>
+              </div>
+
+              {equityGaps.map(g => (
+  <div
+    key={g.label}
+    style={{
+      display: 'grid',
+      gridTemplateColumns: '1fr 80px 80px 80px',
+      gap: 8,
+      padding: '10px 0',
+      borderBottom: '1px solid var(--border)',
+      alignItems: 'center',
+    }}
+  >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: g.color, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, color: 'var(--text)' }}>{g.label}</span>
+                  </div>
+                  <span style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'right' }}>
+                    {g.suggestedPct}%
+                  </span>
+                  <span style={{ fontSize: 12, color: 'var(--text)', textAlign: 'right', fontWeight: 600 }}>
+                    {g.actualPct}%
+                  </span>
+                  <span style={{
+                    fontSize: 12, fontWeight: 700, textAlign: 'right',
+                    color:
+  g.balanced
+    ? 'var(--muted)'
+    : g.delta > 0
+    ? 'var(--green)'
+    : 'var(--red)',
+                  }}>
+                   {
+    g.balanced
+      ? 'Balanced'
+      : g.delta > 0
+      ? `+${g.delta}%`
+      : `${g.delta}%`
+  }
                   </span>
                 </div>
               ))}
@@ -353,9 +651,9 @@ darc()
                 <span style={{ color: 'var(--red)', fontWeight: 600 }}>Red</span> = under-allocated vs. suggested
               </div>
             </div>
-          </>
+      </>
         )}
       </div>
-    </div>
+      </div>
   )
 }

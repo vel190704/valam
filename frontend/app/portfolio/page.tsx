@@ -712,7 +712,13 @@ export default function PortfolioPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { void loadInvestments() }, [loadInvestments])
+  useEffect(() => {
+  async function init() {
+    await loadInvestments()
+  }
+
+  init()
+}, [loadInvestments])
 
   async function handleAdd() {
     setFormError('')

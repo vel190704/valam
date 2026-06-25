@@ -1210,8 +1210,18 @@ setLoading(false)
 
         {/* ── MF SUB-TYPE BREAKDOWN ── */}
         {investments.some(inv => inv.type === 'mf' && inv.mfType) && (
-          <div style={{ background: 'var(--surface)', borderRadius: 18, padding: '20px 22px',
-            border: '1px solid var(--border)', marginBottom: 16 }}>
+          <div
+  onClick={() => router.push('/allocation')}
+  style={{
+    background: 'var(--surface)',
+    borderRadius: 18,
+    padding: '20px 22px',
+    border: '1px solid var(--border)',
+    marginBottom: 16,
+    cursor: 'pointer',
+    transition: 'transform .15s ease',
+  }}
+>
             <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
               textTransform: 'uppercase', fontWeight: 500, marginBottom: 16 }}>
               Mutual Fund Breakdown
@@ -1234,10 +1244,18 @@ setLoading(false)
           let offset = 0
 
           return (
-            <div style={{ background:'var(--surface)',
-              borderRadius:18, padding:'20px 22px',
-              border:'1px solid var(--border)',
-              marginBottom:16 }}>
+            <div
+  onClick={() => router.push('/allocation')}
+  style={{
+    background:'var(--surface)',
+    borderRadius:18,
+    padding:'20px 22px',
+    border:'1px solid var(--border)',
+    marginBottom:16,
+    cursor:'pointer',
+    transition:'transform .15s ease',
+  }}
+>
 
               <div style={{ fontSize:10, color:'var(--muted)',
                 letterSpacing:'.45px', textTransform:'uppercase',

@@ -31,6 +31,7 @@ interface Investment {
   type: InvestmentType
   mfType?: MutualFundType
   amount: number
+  sip_id?: SipPlan
   note?: string
 }
 
@@ -453,23 +454,29 @@ export default function PortfolioPage() {
 
     const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
     const headers = { 'Authorization': `Bearer ${session.access_token}` }
-    const [invRes, sipRes] = await Promise.all([
-      fetch(`${BASE}/investments`, { headers }),
-      fetch(`${BASE}/sips`, { headers }),
-    ])
-    if (invRes.ok) {
-      const json = await invRes.json() as { investments: Investment[] }
-      setInvestments(json.investments ?? [])
-    }
-    if (sipRes.ok) {
-      const json = await sipRes.json() as { sips: SipPlan[] }
-      setSipPlans(json.sips ?? [])
-    }
-    setLoading(false)
+    const invRes = await fetch(`${BASE}/investments`, { headers })
+
+if (invRes.ok) {
+  const json = await invRes.json() as { investments: Investment[] }
+  setInvestments(json.investments ?? [])
+}
+
+const sipRes = await fetch(`${BASE}/sips`, { headers })
+
+if (sipRes.ok) {
+  const json = await sipRes.json() as { sips: SipPlan[] }
+  setSipPlans(json.sips ?? [])
+}
+
+setLoading(false)
   }, [])
 
-  useEffect(() => { void loadInvestments() }, [loadInvestments])
-
+    useEffect(() => {
+    async function init() {
+      await loadInvestments()
+    }
+    init()
+  }, [loadInvestments])
 
   // ── SIP handlers ────────────────────────────────────────────────────────
   async function handleCreateSip() {
@@ -494,7 +501,8 @@ export default function PortfolioPage() {
     const json = await res.json() as { sip?: SipPlan; immediateInvestment?: Investment; error?: string }
     if (!res.ok) { setSipError(json.error ?? 'Failed to create SIP'); setSipSaving(false); return }
     if (json.sip) setSipPlans(prev => [json.sip!, ...prev])
-    if (json.immediateInvestment) setInvestments(prev => [json.immediateInvestment!, ...prev])
+      console.log(json.sip)
+    await loadInvestments()
     setSipAmount(''); setSipNote(''); setSipType('mf'); setSipMfType('flexicap')
     setSipFreq('monthly'); setSipStartDate(new Date().toISOString().slice(0, 10))
     setShowSipForm(false)
@@ -513,6 +521,7 @@ export default function PortfolioPage() {
     if (!res.ok) return
     const json = await res.json() as { sip: SipPlan }
     if (json.sip) setSipPlans(prev => prev.map(s => s.id === id ? json.sip : s))
+      await loadInvestments()
   }
 
   async function handleSipCancel(id: string) {
@@ -525,6 +534,7 @@ export default function PortfolioPage() {
     })
     setSipPlans(prev => prev.filter(s => s.id !== id))
     setCancelConfirmId(null)
+    await loadInvestments()
   }
 
   async function handleLoadHistory(id: string) {
@@ -926,7 +936,7 @@ export default function PortfolioPage() {
                         </span>
                         {sip.note && (
                           <span style={{ color: 'var(--muted)', marginLeft: 12,
-                            fontSize: 10, fontStyle: 'italic' }}>"{sip.note}"</span>
+                            fontSize: 10, fontStyle: 'italic' }}>`{sip.note}`</span>
                         )}
                       </div>
                     )}
@@ -1121,9 +1131,16 @@ export default function PortfolioPage() {
                       fontWeight:500 }}>
                       {TYPE_META[inv.type as InvestmentType]?.emoji ?? ''}{' '}
                       {TYPE_META[inv.type as InvestmentType]?.label ?? inv.type}
-                      {inv.type === 'mf' && inv.mfType && (
-                        <>{' '}•{' '}<span style={{ color:'var(--gold)', fontWeight:600 }}>{MF_META[inv.mfType].label}</span></>
-                      )}
+                      {inv.type === 'mf' &&
+ inv.mfType &&
+ MF_META[inv.mfType as MutualFundType] && (
+  <>
+    {' '}•{' '}
+    <span style={{ color:'var(--gold)', fontWeight:600 }}>
+      {MF_META[inv.mfType as MutualFundType].label}
+    </span>
+  </>
+)}
                     </span>
                     {inv.note && (
                       <span style={{ fontSize:10, color:'var(--muted)',

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LEVEL_NAMES_ARR } from '@/lib/valam'
+import { useTheme } from '../../context/themecontext'
 import Link from 'next/link'
 
 // ── Static content maps ───────────────────────────────────────────────────────
@@ -153,16 +154,12 @@ export default function LearningLevelPage() {
   const params  = useParams()
   const levelParam = Number(params?.level)
 
-  const [dark, setDark]           = useState(false)
+  const { dark, toggleTheme }     = useTheme()
   const [loading, setLoading]     = useState(true)
   const [userLevel, setUserLevel] = useState<number | null>(null)
   const [levelData, setLevelData] = useState<LevelData | null>(null)
   const [recent, setRecent]       = useState<RecentTopic[]>([])
   const [dataSource, setDataSource] = useState<'live' | 'none'>('none')
-
-  useEffect(() => {
-    document.body.classList.toggle('dark', dark)
-  }, [dark])
 
   useEffect(() => {
     if (!levelParam || levelParam < 1 || levelParam > 8) {
@@ -282,7 +279,7 @@ export default function LearningLevelPage() {
             </span>
           </div>
 
-          <button onClick={() => setDark(!dark)}
+          <button onClick={toggleTheme}
             style={{ background: 'var(--surface2)', border: '1px solid var(--border)',
               borderRadius: 20, padding: '4px 12px', fontSize: 11,
               color: 'var(--muted)', cursor: 'pointer' }}>

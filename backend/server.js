@@ -6,6 +6,7 @@ import Groq from "groq-sdk";
 import { calculateLiveSavingsRate, calculateMonthlySavingsRate } from "./lib/savingsRate.js";
 import { calculateVALAM } from "./lib/valam.js";
 import { evaluateMilestones } from "./lib/milestoneEngine.js";
+import { executeDueSIPs } from "./lib/sipCron.js";
 import { determineNextTask } from "./lib/roadmapEngine.js";
 import { generateCoachingTasks } from "./lib/aiCoach.js";
 import { getCachedRoadmap, setCachedRoadmap } from "./lib/roadmapCache.js";
@@ -640,6 +641,226 @@ app.delete("/investments/:id", requireUser, async (req, res) => {
   return res.json({ success: true });
 });
 
+// ── SIP Plans ────────────────────────────────────────────────────────────────
+
+const VALID_MF_TYPES   = ['index','flexicap','midcap','largecap','smallcap','elss','hybrid'];
+const VALID_FREQUENCIES = ['monthly','weekly'];
+const SIP_INVESTMENT_TYPES = VALID_INVESTMENT_TYPES.filter(t => t !== 'realestate');
+
+/** Advance a date by one SIP frequency cycle (month-end safe for monthly). */
+function advanceSipDate(current, frequency, startDate) {
+  if (frequency === 'weekly') {
+    return new Date(current.getTime() + 7 * 24 * 60 * 60 * 1000);
+  }
+  // monthly: keep same calendar day as start_date, clamped to month end
+  const startDay = new Date(startDate + 'T00:00:00').getDate();
+  const next = new Date(current);
+  next.setMonth(next.getMonth() + 1);
+  const maxDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+  next.setDate(Math.min(startDay, maxDay));
+  return next;
+}
+
+// 2a. GET /sips — list all SIPs for the authenticated user
+app.get("/sips", requireUser, async (req, res) => {
+  const { data: sips, error } = await supabaseAdmin
+    .from('sip_plans')
+    .select('*')
+    .eq('user_id', req.user.id)
+    .order('created_at', { ascending: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  // Attach history count per SIP
+  const withCounts = await Promise.all((sips ?? []).map(async (sip) => {
+    const { count } = await supabaseAdmin
+      .from('investments')
+      .select('id', { count: 'exact', head: true })
+      .eq('sip_id', sip.id);
+    return { ...sip, history_count: count ?? 0 };
+  }));
+
+  res.json({ sips: withCounts });
+});
+
+// 2b. POST /sips — create a new SIP plan
+app.post("/sips", requireUser, async (req, res) => {
+  const { investment_type, mf_type, amount, frequency, start_date, note } = req.body;
+
+  if (!investment_type || !amount || !frequency || !start_date) {
+    return res.status(400).json({ error: 'investment_type, amount, frequency, and start_date are required' });
+  }
+  if (!SIP_INVESTMENT_TYPES.includes(investment_type)) {
+    return res.status(400).json({ error: `investment_type must be one of: ${SIP_INVESTMENT_TYPES.join(', ')}` });
+  }
+  if (investment_type === 'mf' && !VALID_MF_TYPES.includes(mf_type)) {
+    return res.status(400).json({ error: `mf_type is required for Mutual Funds and must be one of: ${VALID_MF_TYPES.join(', ')}` });
+  }
+  if (investment_type !== 'mf' && mf_type) {
+    return res.status(400).json({ error: 'mf_type is only valid when investment_type is mf' });
+  }
+  if (!VALID_FREQUENCIES.includes(frequency)) {
+    return res.status(400).json({ error: "frequency must be 'monthly' or 'weekly'" });
+  }
+  const amt = Number(amount);
+  if (isNaN(amt) || amt <= 0) {
+    return res.status(400).json({ error: 'amount must be a positive number' });
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  let nextExecDate = start_date;
+
+  // If start_date is today or past, execute immediately and advance to next cycle
+  let immediateInvestment = null;
+  if (start_date <= today) {
+    const execResult = await supabaseAdmin
+      .from('investments')
+      .insert({
+        user_id: req.user.id,
+        date:    start_date,
+        type:    investment_type,
+        amount:  amt,
+        note:    note ? `[SIP] ${note}` : `[SIP] Auto-logged ${frequency} SIP`,
+      })
+      .select()
+      .single();
+
+    if (!execResult.error) {
+      immediateInvestment = execResult.data;
+      // Advance next_execution_date past today
+      let d = new Date(start_date + 'T00:00:00');
+      do {
+        d = advanceSipDate(d, frequency, start_date);
+      } while (d.toISOString().split('T')[0] <= today);
+      nextExecDate = d.toISOString().split('T')[0];
+    }
+  }
+
+  const { data: sip, error } = await supabaseAdmin
+    .from('sip_plans')
+    .insert({
+      user_id:             req.user.id,
+      investment_type,
+      mf_type:             investment_type === 'mf' ? (mf_type ?? null) : null,
+      amount:              amt,
+      frequency,
+      start_date,
+      next_execution_date: nextExecDate,
+      note:                note ?? null,
+    })
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  // Link the immediate investment to the sip if one was created
+  if (immediateInvestment) {
+    await supabaseAdmin
+      .from('investments')
+      .update({ sip_id: sip.id })
+      .eq('id', immediateInvestment.id);
+    immediateInvestment = { ...immediateInvestment, sip_id: sip.id };
+  }
+
+  res.status(201).json({ sip, immediateInvestment });
+});
+
+// 2c. PATCH /sips/:id — edit amount, note, or status
+app.patch("/sips/:id", requireUser, async (req, res) => {
+  const { id } = req.params;
+  const { amount, note, status } = req.body;
+
+  const { data: existing, error: fetchErr } = await supabaseAdmin
+    .from('sip_plans')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', req.user.id)
+    .single();
+
+  if (fetchErr || !existing) return res.status(404).json({ error: 'SIP not found' });
+  if (existing.status === 'cancelled') {
+    return res.status(400).json({ error: 'Cannot modify a cancelled SIP' });
+  }
+
+  const updates = { updated_at: new Date().toISOString() };
+
+  if (amount !== undefined) {
+    const amt = Number(amount);
+    if (isNaN(amt) || amt <= 0) return res.status(400).json({ error: 'amount must be a positive number' });
+    updates.amount = amt;
+  }
+  if (note !== undefined) updates.note = note;
+
+  if (status !== undefined) {
+    if (!['active','paused','cancelled'].includes(status)) {
+      return res.status(400).json({ error: "status must be 'active', 'paused', or 'cancelled'" });
+    }
+    updates.status = status;
+
+    // Resuming from paused: advance next_execution_date past today without backfilling
+    if (status === 'active' && existing.status === 'paused') {
+      const today = new Date().toISOString().split('T')[0];
+      let d = new Date(existing.start_date + 'T00:00:00');
+      // Walk forward in steps until we find the next future date
+      while (d.toISOString().split('T')[0] <= today) {
+        d = advanceSipDate(d, existing.frequency, existing.start_date);
+      }
+      updates.next_execution_date = d.toISOString().split('T')[0];
+    }
+  }
+
+  const { data: updated, error } = await supabaseAdmin
+    .from('sip_plans')
+    .update(updates)
+    .eq('id', id)
+    .eq('user_id', req.user.id)
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ sip: updated });
+});
+
+// 2d. DELETE /sips/:id — soft-cancel (keeps history)
+app.delete("/sips/:id", requireUser, async (req, res) => {
+  const { id } = req.params;
+
+  const { data: updated, error } = await supabaseAdmin
+    .from('sip_plans')
+    .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('user_id', req.user.id)
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ sip: updated });
+});
+
+// 2e. GET /sips/:id/history — investment entries created by this SIP
+app.get("/sips/:id/history", requireUser, async (req, res) => {
+  const { id } = req.params;
+
+  // Verify ownership
+  const { data: sip, error: sipErr } = await supabaseAdmin
+    .from('sip_plans')
+    .select('id')
+    .eq('id', id)
+    .eq('user_id', req.user.id)
+    .single();
+
+  if (sipErr || !sip) return res.status(404).json({ error: 'SIP not found' });
+
+  const { data: history, error } = await supabaseAdmin
+    .from('investments')
+    .select('*')
+    .eq('sip_id', id)
+    .order('date', { ascending: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ history: history ?? [] });
+});
+
 // ── Net Worth Items ───────────────────────────────────────────────────────────
 app.get("/networth", requireUser, async (req, res) => {
   const { data, error } = await supabaseAdmin
@@ -792,18 +1013,28 @@ app.get("/allocation-insights", requireUser, async (req, res) => {
 
     const riskLabel = { low: 'Conservative', medium: 'Balanced', high: 'Aggressive' }[risk] ?? risk;
 
-    const prompt = `You are VALAM AI, a wealth coach for Indian retail investors.
-The user is at Level ${level} with a ${riskLabel} risk profile.
-Their current portfolio has the following gaps vs the suggested allocation:
+    const { data: profR } = await supabaseAdmin
+      .from('profiles').select('age').eq('user_id', req.user.id).single();
+    const userAge = profR?.age ?? null;
 
+    const totalAbsGap = parsedGaps.reduce((s, g) => s + Math.abs(Number(g.delta ?? 0)), 0);
+    const alignmentScore = Math.max(0, Math.round(100 - totalAbsGap / 2));
+
+    const prompt = `You are VALAM AI, a wealth coach for Indian retail investors following the VALAM framework.
+The user is ${userAge ? `${userAge} years old, ` : ''}at VALAM Level ${level} with a ${riskLabel} risk profile.
+
+VALAM ASSET ALLOCATION FRAMEWORK:
+- Level 1–3 (Foundation): Emergency fund first, then basic equity exposure via SIP and FDs
+- Level 4–5 (Growth): Diversify across equity (index/diversified funds), debt (FD, bonds), and gold (SGBs)
+- Level 6–8 (Wealth): Sophisticated allocation — direct equity, international exposure, alongside core SIP
+
+Their current portfolio vs VALAM suggested allocation:
 ${parsedGaps.map(g => `${g.label}: actual ${g.actualPct}%, suggested ${g.suggestedPct}%, gap ${g.delta > 0 ? '+' : ''}${g.delta}%`).join('\n')}
 
-Write 2–3 sentences of concise, practical commentary on their allocation gaps.
-- Name the 1–2 biggest gaps and what they mean for their wealth journey
-- Suggest one concrete action (e.g., "redirect your next SIP increase toward X")
-- Use Indian context (SIP, FD, equity mutual funds as categories — never specific fund names)
-- Never mention guaranteed returns or specific % return figures
-Respond in plain text only — no markdown, no bullet points, no preamble.`;
+First line must be exactly: "Alignment Score: ${alignmentScore}%"
+Then write 2 concise sentences identifying the 1–2 biggest gaps and what they mean for this user's wealth journey.
+End with one concrete action using Indian context (SIP, FD, equity mutual funds as categories — never specific fund names or guaranteed returns).
+Plain text only — no markdown, no bullet points.`;
 
     const response = await groq.chat.completions.create({
       model:      'llama-3.3-70b-versatile',
@@ -922,12 +1153,31 @@ app.get("/roadmap", requireUser, async (req, res) => {
     }
 
     // ── Fetch full context for VALAM AI ──────────────────────────────────────
-    const [invResult, incResult, learningResult] = await Promise.all([
+    const [invResult, incResult, learningResult, sipResult] = await Promise.all([
       supabaseAdmin.from('investments').select('type, amount, date').eq('user_id', req.user.id),
       supabaseAdmin.from('income_entries').select('source, amount, date').eq('user_id', req.user.id).gte('date', fyStartR),
       supabaseAdmin.from('learning_progress').select('level, topic_order, status').eq('user_id', req.user.id).eq('status', 'completed'),
+      supabaseAdmin.from('sip_plans').select('id').eq('user_id', req.user.id).eq('status', 'active').limit(1),
     ]);
     const totalInvestedAll = (invResult.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
+
+    // ── Derived financial health fields ──────────────────────────────────────
+    const hasActiveSIP = (sipResult.data ?? []).length > 0;
+    const cashAndEmergency = (nwResultR.data ?? [])
+      .filter(r => ['cash', 'emergency'].includes(r.category))
+      .reduce((s, r) => s + Number(r.amount), 0);
+    const emergencyFundTarget = Math.round(monthlyIncomeR * 6);
+    const emergencyMonthsCovered = emergencyFundTarget > 0
+      ? Math.round((cashAndEmergency / emergencyFundTarget) * 6 * 10) / 10
+      : 0;
+    const invData = invResult.data ?? [];
+    const totalInvSafe = totalInvestedAll || 1;
+    const equityAmt = invData.filter(r => ['mf','stock','etf'].includes(r.type)).reduce((s, r) => s + Number(r.amount), 0);
+    const debtAmt   = invData.filter(r => ['fd','bond'].includes(r.type)).reduce((s, r) => s + Number(r.amount), 0);
+    const goldAmt   = invData.filter(r => ['gold'].includes(r.type)).reduce((s, r) => s + Number(r.amount), 0);
+    const equityPct = Math.round(equityAmt / totalInvSafe * 100);
+    const debtPct   = Math.round(debtAmt   / totalInvSafe * 100);
+    const goldPct   = Math.round(goldAmt   / totalInvSafe * 100);
 
     const LEVEL_NAMES_SRV = ['Seed','Explorer','Builder','Accelerator','Achiever','Wealth Creator','Wealth Architect','Legend'];
     const currentLevelNum  = fresh?.positionLevel ?? profile.valamLevel ?? 1;
@@ -954,11 +1204,18 @@ app.get("/roadmap", requireUser, async (req, res) => {
         monthlyIncomeFormatted: `₹${(monthlyIncomeR / 100000).toFixed(2)}L`,
         savingsRate:      Math.round(liveSavingsRateR * 10) / 10,
         savingsRateScore: freshFactorScores?.sav ?? 0,
+        cashAndEmergency,
+        emergencyFundTarget,
+        emergencyMonthsCovered,
+        hasActiveSIP,
       },
       portfolioProfile: {
         totalInvested:    totalInvestedAll,
         entryCount:       (invResult.data ?? []).length,
         allocationByType: buildInvestmentAllocation(invResult.data ?? []),
+        equityPct,
+        debtPct,
+        goldPct,
       },
       learningProfile: {
         completedTopics:   (learningResult.data ?? []).length,
@@ -1186,7 +1443,10 @@ app.post("/learning/progress", requireUser, async (req, res) => {
 app.post('/contact', async (req, res) => {
   try {
     if (!resend) {
-      return res.status(503).json({ error: 'Email not configured' })
+      return res.status(503).json({
+        error: 'Email service not configured',
+        fallback: 'valamhq@gmail.com',
+      })
     }
     const { name, email, message } = req.body
     await resend.emails.send({
@@ -1213,3 +1473,10 @@ const PORT = process.env.PORT ?? 5000;
 app.listen(PORT, () => {
   console.log(`✅ VALAM backend running on port ${PORT}`);
 });
+
+// ── SIP daily cron ────────────────────────────────────────────────────────────
+// Run on startup to catch any SIPs missed overnight, then every 24 hours.
+executeDueSIPs(supabaseAdmin).catch(console.error);
+setInterval(() => {
+  executeDueSIPs(supabaseAdmin).catch(console.error);
+}, 24 * 60 * 60 * 1000);

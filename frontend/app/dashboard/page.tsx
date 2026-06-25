@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LEVEL_NAMES_ARR } from '@/lib/valam'
 import { getAllocation } from '@/lib/allocation'
+import { useTheme } from '../context/themecontext'
 import Link from 'next/link'
 
 interface DashboardData {
@@ -76,6 +77,52 @@ interface RoadmapResponse {
   source: 'llm' | 'cache' | 'fallback' | 'error'
 }
 
+function getCategoryMessage(category: string): string {
+  const messages: Record<string, string> = {
+    investment: 'Your investment discipline is paying off.',
+    savings: 'Your savings habit is building a strong foundation.',
+    networth: 'Your net worth is growing meaningfully.',
+    learning: 'Your financial knowledge is expanding.',
+    income: 'Your income growth is accelerating your wealth journey.',
+    emergency: "You've secured your financial safety net.",
+  }
+  return messages[category] ?? "You've reached a meaningful milestone on your wealth journey."
+}
+
+function getLevelTitle(level: number): string {
+  const titles: Record<number, string> = {
+    2: "You're Exploring", 3: "You're Building", 4: "You're Accelerating",
+    5: "You've Achieved", 6: 'Creating Wealth', 7: 'Architecting Wealth', 8: "You're a Legend",
+  }
+  return titles[level] ?? 'Level Up!'
+}
+
+function getLevelMessage(level: number): string {
+  const messages: Record<number, string> = {
+    2: "You've taken your first real steps beyond the starting point. Your financial journey is underway.",
+    3: "You're laying the bricks of long-term wealth. Keep building consistently.",
+    4: "Your financial momentum is real. You're moving faster than most Indians ever will.",
+    5: "You've crossed a threshold that very few reach. Your habits are paying off.",
+    6: "You're in the top tier of Indian wealth builders. Wealth is compounding in your favour.",
+    7: "You're designing a financial legacy. Your wealth is working harder than you are.",
+    8: "You've reached the pinnacle. You are in India's financial elite.",
+  }
+  return messages[level] ?? "You've reached the next level on your wealth journey."
+}
+
+function getLevelUnlocks(level: number): string[] {
+  const unlocks: Record<number, string[]> = {
+    2: ['Portfolio tracking unlocked', 'Basic allocation insights'],
+    3: ['Advanced AI tasks', 'Income & savings analysis'],
+    4: ['Accelerator milestone set', 'Deep portfolio breakdown'],
+    5: ['Achiever badge', 'Full wealth analytics'],
+    6: ['Wealth Creator status', 'Elite task recommendations'],
+    7: ['Wealth Architect tier', 'Legacy planning insights'],
+    8: ['Legend status achieved', 'Complete VALAM mastery'],
+  }
+  return unlocks[level] ?? ['New level unlocked']
+}
+
 function savingsRateLabel(score: number): string {
   const m: Record<number, string> = {
     1: '<2%', 2: '2–5%', 3: '5–10%', 4: '10–15%',
@@ -108,6 +155,8 @@ const CSS = `
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:var(--bg);color:var(--text);font-family:Inter,sans-serif;}
+  @keyframes lpFadeIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes lpPop{0%{transform:scale(0.6);}60%{transform:scale(1.12);}100%{transform:scale(1);}}
 `
 
 function getPotentialLevel(age: number): number {
@@ -123,17 +172,32 @@ export default function DashboardPage() {
   const [networthItems, setNetworthItems] = useState<NetworthItem[]>([])
   const [loading, setLoading] = useState(true)
   const [dataSource, setDataSource] = useState<'live' | 'none'>('none')
-  const [dark, setDark] = useState(false)
+  const { dark, toggleTheme } = useTheme()
   const [milestonesUnlocked, setMilestonesUnlocked] = useState(0)
   const [recentMilestones, setRecentMilestones] = useState<{ name: string; unlocked_at: string }[]>([])
   const [savingsRate, setSavingsRate] = useState(0)
   const [monthlySavingsRate, setMonthlySavingsRate] = useState<number | null>(null)
   const [roadmap, setRoadmap] = useState<RoadmapResponse | null>(null)
   const [recentLearning, setRecentLearning] = useState<{ topicName: string; status: string }[]>([])
+  const [achievementQueue, setAchievementQueue] = useState<Array<{name: string; category: string}>>([])
+  const [levelUpData, setLevelUpData] = useState<{newLevel: number; newLevelName: string; oldLevelName: string} | null>(null)
 
   useEffect(() => {
-    document.body.classList.toggle('dark', dark)
-  }, [dark])
+    if (!data) return
+    const score = data.calculatedScore ?? data.currentScore ?? 0
+    const level = score >= 7.5 ? 8 : Math.floor(score)
+    const levelName = LEVEL_NAMES_ARR[Math.max(0, level - 1)] ?? 'Seed'
+    const lastKnown = sessionStorage.getItem('valam_last_known_level')
+    const lastLevel = lastKnown ? parseInt(lastKnown, 10) : null
+    if (lastLevel !== null && level > lastLevel) {
+      setLevelUpData({
+        newLevel: level,
+        newLevelName: levelName,
+        oldLevelName: LEVEL_NAMES_ARR[Math.max(0, lastLevel - 1)] ?? 'Seed',
+      })
+    }
+    sessionStorage.setItem('valam_last_known_level', String(level))
+  }, [data])
 
   useEffect(() => {
     async function load() {
@@ -197,7 +261,7 @@ export default function DashboardPage() {
         }
         if (milestonesRes.ok) {
           const mJson = await milestonesRes.json() as {
-            milestones: { name: string; unlocked: boolean; unlocked_at: string | null }[]
+            milestones: { id: string; name: string; category: string; unlocked: boolean; unlocked_at: string | null }[]
             unlockedCount: number
           }
           setMilestonesUnlocked(mJson.unlockedCount ?? 0)
@@ -207,6 +271,17 @@ export default function DashboardPage() {
             .slice(0, 3)
             .map(m => ({ name: m.name, unlocked_at: m.unlocked_at! }))
           setRecentMilestones(recent)
+          const shownRaw = sessionStorage.getItem('valam_shown_milestones')
+          const shown: string[] = shownRaw ? JSON.parse(shownRaw) as string[] : []
+          const newlyUnlocked = (mJson.milestones ?? [])
+            .filter(m => m.unlocked && m.id && !shown.includes(m.id))
+            .slice(0, 5)
+            .map(m => ({ name: m.name, category: m.category ?? 'general' }))
+          if (newlyUnlocked.length > 0) {
+            const allIds = (mJson.milestones ?? []).filter(m => m.unlocked && m.id).map(m => m.id)
+            sessionStorage.setItem('valam_shown_milestones', JSON.stringify([...new Set([...shown, ...allIds])]))
+            setAchievementQueue(newlyUnlocked)
+          }
         }
         if (roadmapRes.ok) {
           const rJson = await roadmapRes.json() as RoadmapResponse
@@ -319,6 +394,98 @@ export default function DashboardPage() {
     <main style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'Inter,sans-serif' }}>
       <style>{CSS}</style>
 
+      {/* LEVEL-UP POPUP */}
+      {levelUpData && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 24, animation: 'lpFadeIn 0.45s ease'
+        }}>
+          <div style={{
+            background: 'var(--surface)', borderRadius: 24,
+            padding: '40px 36px', maxWidth: 440, width: '100%',
+            border: '1px solid var(--border-md)',
+            boxShadow: '0 24px 80px rgba(0,0,0,0.4)',
+            textAlign: 'center', animation: 'lpPop 0.4s ease'
+          }}>
+            <div style={{ fontSize: 56, marginBottom: 16 }}>⭐</div>
+            <div style={{ fontSize: 10, color: 'var(--gold)', fontWeight: 700, letterSpacing: '.6px', textTransform: 'uppercase', marginBottom: 8 }}>Level Up</div>
+            <div style={{ fontFamily: 'Playfair Display,serif', fontSize: 28, color: 'var(--text)', fontWeight: 700, marginBottom: 8 }}>
+              {getLevelTitle(levelUpData.newLevel)}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.7, marginBottom: 20 }}>
+              {getLevelMessage(levelUpData.newLevel)}
+            </div>
+            <div style={{ background: 'rgba(184,146,74,0.08)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px', marginBottom: 24 }}>
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.4px' }}>
+                {levelUpData.oldLevelName} → {levelUpData.newLevelName}
+              </div>
+              {getLevelUnlocks(levelUpData.newLevel).map((u, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: i < getLevelUnlocks(levelUpData.newLevel).length - 1 ? 6 : 0 }}>
+                  <span style={{ color: 'var(--gold)', fontSize: 12 }}>✦</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-sm)' }}>{u}</span>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setLevelUpData(null)}
+              style={{
+                width: '100%', padding: '14px 0',
+                background: 'linear-gradient(135deg,var(--gold-lt) 0%,var(--gold) 40%,var(--bronze) 100%)',
+                border: 'none', borderRadius: 50, cursor: 'pointer',
+                fontFamily: 'Inter,sans-serif', fontWeight: 700, fontSize: 14,
+                color: '#2a1a0e', boxShadow: '0 4px 24px rgba(201,168,76,0.3)'
+              }}>
+              Continue My Journey →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MILESTONE ACHIEVEMENT POPUP */}
+      {!levelUpData && achievementQueue.length > 0 && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 24, animation: 'lpFadeIn 0.45s ease'
+        }}>
+          <div style={{
+            background: 'var(--surface)', borderRadius: 24,
+            padding: '40px 36px', maxWidth: 420, width: '100%',
+            border: '1px solid var(--border-md)',
+            boxShadow: '0 24px 80px rgba(0,0,0,0.4)',
+            textAlign: 'center', animation: 'lpPop 0.4s ease'
+          }}>
+            <div style={{ fontSize: 52, marginBottom: 16 }}>🏆</div>
+            <div style={{ fontSize: 10, color: 'var(--gold)', fontWeight: 700, letterSpacing: '.6px', textTransform: 'uppercase', marginBottom: 8 }}>Achievement Unlocked</div>
+            <div style={{ fontFamily: 'Playfair Display,serif', fontSize: 22, color: 'var(--text)', fontWeight: 700, marginBottom: 10, lineHeight: 1.3 }}>
+              {achievementQueue[0].name}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.7, marginBottom: 24 }}>
+              {getCategoryMessage(achievementQueue[0].category)}
+            </div>
+            {achievementQueue.length > 1 && (
+              <div style={{ fontSize: 11, color: 'var(--bronze)', fontWeight: 600, marginBottom: 16 }}>
+                +{achievementQueue.length - 1} more milestone{achievementQueue.length > 2 ? 's' : ''} unlocked
+              </div>
+            )}
+            <button
+              onClick={() => setAchievementQueue(q => q.slice(1))}
+              style={{
+                width: '100%', padding: '14px 0',
+                background: 'linear-gradient(135deg,var(--gold-lt) 0%,var(--gold) 40%,var(--bronze) 100%)',
+                border: 'none', borderRadius: 50, cursor: 'pointer',
+                fontFamily: 'Inter,sans-serif', fontWeight: 700, fontSize: 14,
+                color: '#2a1a0e', boxShadow: '0 4px 24px rgba(201,168,76,0.3)'
+              }}>
+              {achievementQueue.length > 1 ? 'Next →' : 'Keep Going →'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* TOP NAV */}
       <nav style={{
         background: 'var(--surface)', borderBottom: '1px solid var(--border)',
@@ -357,7 +524,7 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          <button onClick={() => setDark(!dark)}
+          <button onClick={toggleTheme}
             style={{
               background: 'var(--surface2)', border: '1px solid var(--border)',
               borderRadius: 20, padding: '4px 12px', fontSize: 11,
@@ -444,7 +611,7 @@ export default function DashboardPage() {
                 }}>{data.name}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
                   <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--gold)' }} />
-                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                  <span data-testid="hero-current-level" data-level={liveLevel} style={{ fontSize: 11, color: 'var(--muted)' }}>
                     {liveLevelName} · Level {liveLevel}
                   </span>
                 </div>

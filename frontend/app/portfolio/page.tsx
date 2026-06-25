@@ -6,11 +6,30 @@ import DNavbar from '@/components/layout/dnavbar'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type InvestmentType = 'mf' | 'stock' | 'fd' | 'crypto' | 'bond' | 'etf' | 'realestate'
+type MfType = 'index' | 'flexicap' | 'midcap' | 'largecap' | 'smallcap' | 'elss' | 'hybrid'
+type MutualFundType = 'largecap' | 'midcap' | 'smallcap' | 'nifty50' | 'flexicap' | 'international' | 'debt' | 'commodity'
+type SipFrequency = 'monthly' | 'weekly'
+type SipStatus = 'active' | 'paused' | 'cancelled'
+
+interface SipPlan {
+  id: string
+  investment_type: string
+  mf_type: MfType | null
+  amount: number
+  frequency: SipFrequency
+  start_date: string
+  next_execution_date: string
+  status: SipStatus
+  note: string | null
+  created_at: string
+  history_count?: number
+}
 
 interface Investment {
   id: string
   date?: string
   type: InvestmentType
+  mfType?: MutualFundType
   amount: number
   note?: string
 }
@@ -29,6 +48,42 @@ const TYPE_META: Record<InvestmentType, { label: string; color: string; emoji: s
 const TYPES = Object.keys(TYPE_META) as InvestmentType[]
 // realestate excluded from new entries but kept in TYPE_META for displaying existing ones
 const FORM_TYPES = TYPES.filter(t => t !== 'realestate')
+// SIP-eligible types (same exclusion)
+const SIP_TYPES = FORM_TYPES
+
+const MF_TYPE_META: Record<MfType, string> = {
+  index:    'Index Fund',
+  flexicap: 'Flexi Cap',
+  midcap:   'Mid Cap',
+  largecap: 'Large Cap',
+  smallcap: 'Small Cap',
+  elss:     'ELSS (Tax Saver)',
+  hybrid:   'Hybrid Fund',
+}
+
+const MF_META: Record<MutualFundType, { label: string; emoji: string }> = {
+  largecap:      { label: 'Large Cap',      emoji: '🏢' },
+  midcap:        { label: 'Mid Cap',        emoji: '📈' },
+  smallcap:      { label: 'Small Cap',      emoji: '🚀' },
+  nifty50:       { label: 'Nifty 50',       emoji: '🇮🇳' },
+  flexicap:      { label: 'Flexi Cap',      emoji: '🔄' },
+  international: { label: 'International',  emoji: '🌎' },
+  debt:          { label: 'Debt Fund',      emoji: '🛡️' },
+  commodity:     { label: 'Commodity',      emoji: '🥇' },
+}
+
+const MF_TYPES = Object.keys(MF_META) as MutualFundType[]
+
+const MF_COLORS: Record<MutualFundType, string> = {
+  largecap:      '#B8924A',
+  midcap:        '#D4AD72',
+  smallcap:      '#F0D080',
+  nifty50:       '#5B8DB8',
+  flexicap:      '#9B59B6',
+  international: '#16A085',
+  debt:          '#27AE60',
+  commodity:     '#E07B54',
+}
 
 const CSS = `
   :root {
@@ -285,6 +340,79 @@ function DonutChart({ investments }: { investments: Investment[] }) {
   )
 }
 
+// ── MF Donut Chart ─────────────────────────────────────────────────────────
+function MFDonutChart({ investments }: { investments: Investment[] }) {
+  const mfInvs = investments.filter(inv => inv.type === 'mf' && inv.mfType)
+  const totals: Partial<Record<MutualFundType, number>> = {}
+  mfInvs.forEach(inv => {
+    const t = inv.mfType!
+    totals[t] = (totals[t] ?? 0) + inv.amount
+  })
+  const grand = Object.values(totals).reduce((a, b) => a + b, 0) || 1
+  const slices = (Object.entries(totals) as [MutualFundType, number][]).sort((a, b) => b[1] - a[1])
+  const circumference = 2 * Math.PI * 52
+  let offset = 0
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 32, flexWrap: 'wrap' }}>
+      <div style={{ position: 'relative', width: 140, height: 140, flexShrink: 0 }}>
+        <svg viewBox="0 0 130 130" width="140" height="140">
+          <circle cx="65" cy="65" r="52" fill="none" stroke="var(--surface2)" strokeWidth="22"/>
+          {slices.map(([type, amt], i) => {
+            const pct = amt / grand
+            const dash = pct * circumference
+            const startOffset = offset
+            offset += dash
+            const rotate = -90 + (startOffset / circumference) * 360
+            return (
+              <circle key={i} cx="65" cy="65" r="52" fill="none"
+                stroke={MF_COLORS[type]} strokeWidth="22"
+                strokeDasharray={`${dash} ${circumference - dash}`}
+                transform={`rotate(${rotate} 65 65)`}/>
+            )
+          })}
+        </svg>
+        <div style={{ position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%,-50%)', textAlign: 'center' }}>
+          <div style={{ fontFamily: 'Playfair Display,serif', fontSize: 13,
+            color: 'var(--text)', fontWeight: 500 }}>{slices.length}</div>
+          <div style={{ fontSize: 9, color: 'var(--muted)' }}>MF Types</div>
+        </div>
+      </div>
+      <div style={{ flex: 1, minWidth: 200, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {slices.map(([type, amt]) => {
+          const pct = Math.round(amt / grand * 100)
+          return (
+            <div key={type}>
+              <div style={{ display: 'flex', justifyContent: 'space-between',
+                alignItems: 'center', marginBottom: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span>{MF_META[type].emoji}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500 }}>
+                    {MF_META[type].label}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>₹{amt.toLocaleString()}</span>
+                  <span style={{ color: MF_COLORS[type], fontWeight: 700 }}>{pct}%</span>
+                </div>
+              </div>
+              <div style={{ height: 5, background: 'var(--surface2)', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ width: `${pct}%`, height: '100%', background: MF_COLORS[type] }}/>
+              </div>
+            </div>
+          )
+        })}
+        {slices.length === 0 && (
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+            No MF entries with sub-type tracked yet
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────
 export default function PortfolioPage() {
   const router = useRouter()
@@ -293,29 +421,136 @@ export default function PortfolioPage() {
 
   const [formDate, setFormDate]     = useState('')
   const [formType, setFormType]     = useState<InvestmentType>('mf')
+  const [formMfType, setFormMfType] = useState<MutualFundType>('largecap')
   const [formAmount, setFormAmount] = useState('')
   const [formNote, setFormNote]     = useState('')
   const [saving, setSaving]         = useState(false)
   const [formError, setFormError]   = useState('')
   const [expandedType, setExpandedType] = useState<InvestmentType | null>(null)
 
+  // SIP state
+  const [sipPlans, setSipPlans]         = useState<SipPlan[]>([])
+  const [showSipForm, setShowSipForm]   = useState(false)
+  const [sipSaving, setSipSaving]       = useState(false)
+  const [sipError, setSipError]         = useState('')
+  const [sipType, setSipType]           = useState<InvestmentType>('mf')
+  const [sipMfType, setSipMfType]       = useState<MfType>('flexicap')
+  const [sipAmount, setSipAmount]       = useState('')
+  const [sipFreq, setSipFreq]           = useState<SipFrequency>('monthly')
+  const [sipStartDate, setSipStartDate] = useState(new Date().toISOString().slice(0, 10))
+  const [sipNote, setSipNote]           = useState('')
+  const [expandedSipId, setExpandedSipId]   = useState<string | null>(null)
+  const [sipHistory, setSipHistory]         = useState<Record<string, Investment[]>>({})
+  const [historyLoading, setHistoryLoading] = useState<string | null>(null)
+  const [editingSipId, setEditingSipId]     = useState<string | null>(null)
+  const [editAmount, setEditAmount]         = useState('')
+  const [editNote, setEditNote]             = useState('')
+  const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null)
+
   const loadInvestments = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) { setLoading(false); return }
 
     const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
-    const res = await fetch(`${BASE}/investments`, {
-      headers: { 'Authorization': `Bearer ${session.access_token}` },
-    })
-    if (res.ok) {
-      const json = await res.json() as { investments: Investment[] }
+    const headers = { 'Authorization': `Bearer ${session.access_token}` }
+    const [invRes, sipRes] = await Promise.all([
+      fetch(`${BASE}/investments`, { headers }),
+      fetch(`${BASE}/sips`, { headers }),
+    ])
+    if (invRes.ok) {
+      const json = await invRes.json() as { investments: Investment[] }
       setInvestments(json.investments ?? [])
+    }
+    if (sipRes.ok) {
+      const json = await sipRes.json() as { sips: SipPlan[] }
+      setSipPlans(json.sips ?? [])
     }
     setLoading(false)
   }, [])
 
   useEffect(() => { void loadInvestments() }, [loadInvestments])
 
+
+  // ── SIP handlers ────────────────────────────────────────────────────────
+  async function handleCreateSip() {
+    setSipError('')
+    const amt = parseFloat(sipAmount)
+    if (!sipAmount || isNaN(amt) || amt <= 0) { setSipError('Enter a valid amount'); return }
+    if (!sipStartDate) { setSipError('Select a start date'); return }
+    setSipSaving(true)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { setSipError('Not logged in'); setSipSaving(false); return }
+    const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+    const res = await fetch(`${BASE}/sips`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({
+        investment_type: sipType,
+        mf_type: sipType === 'mf' ? sipMfType : undefined,
+        amount: amt, frequency: sipFreq,
+        start_date: sipStartDate, note: sipNote || undefined,
+      }),
+    })
+    const json = await res.json() as { sip?: SipPlan; immediateInvestment?: Investment; error?: string }
+    if (!res.ok) { setSipError(json.error ?? 'Failed to create SIP'); setSipSaving(false); return }
+    if (json.sip) setSipPlans(prev => [json.sip!, ...prev])
+    if (json.immediateInvestment) setInvestments(prev => [json.immediateInvestment!, ...prev])
+    setSipAmount(''); setSipNote(''); setSipType('mf'); setSipMfType('flexicap')
+    setSipFreq('monthly'); setSipStartDate(new Date().toISOString().slice(0, 10))
+    setShowSipForm(false)
+    setSipSaving(false)
+  }
+
+  async function handleSipPatch(id: string, patch: Partial<{ amount: number; note: string; status: SipStatus }>) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+    const res = await fetch(`${BASE}/sips/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify(patch),
+    })
+    if (!res.ok) return
+    const json = await res.json() as { sip: SipPlan }
+    if (json.sip) setSipPlans(prev => prev.map(s => s.id === id ? json.sip : s))
+  }
+
+  async function handleSipCancel(id: string) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+    await fetch(`${BASE}/sips/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${session.access_token}` },
+    })
+    setSipPlans(prev => prev.filter(s => s.id !== id))
+    setCancelConfirmId(null)
+  }
+
+  async function handleLoadHistory(id: string) {
+    if (expandedSipId === id) { setExpandedSipId(null); return }
+    setExpandedSipId(id)
+    if (sipHistory[id]) return
+    setHistoryLoading(id)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { setHistoryLoading(null); return }
+    const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
+    const res = await fetch(`${BASE}/sips/${id}/history`, {
+      headers: { 'Authorization': `Bearer ${session.access_token}` },
+    })
+    if (res.ok) {
+      const json = await res.json() as { history: Investment[] }
+      setSipHistory(prev => ({ ...prev, [id]: json.history ?? [] }))
+    }
+    setHistoryLoading(null)
+  }
+
+  async function handleSipEditSave(id: string) {
+    const amt = parseFloat(editAmount)
+    if (isNaN(amt) || amt <= 0) return
+    await handleSipPatch(id, { amount: amt, note: editNote || undefined })
+    setEditingSipId(null)
+  }
 
   async function handleAdd() {
     setFormError('')
@@ -337,12 +572,13 @@ export default function PortfolioPage() {
       },
       body: JSON.stringify({
         date: formDate || undefined, type: formType,
+        mfType: formType === 'mf' ? formMfType : undefined,
         amount: amt, note: formNote || undefined,
       }),
     })
 
     if (res.ok) {
-      setFormDate(''); setFormAmount(''); setFormNote(''); setFormType('mf')
+      setFormDate(''); setFormAmount(''); setFormNote(''); setFormType('mf'); setFormMfType('largecap')
       await loadInvestments()
     } else {
       const j = await res.json() as { error?: string }
@@ -473,6 +709,24 @@ export default function PortfolioPage() {
               </select>
             </div>
 
+            {/* MF Category — conditional */}
+            {formType === 'mf' && (
+              <div>
+                <label style={{ fontSize: 10, color: 'var(--muted)',
+                  fontWeight: 500, display: 'block', marginBottom: 5 }}>MF Category</label>
+                <select value={formMfType}
+                  onChange={e => setFormMfType(e.target.value as MutualFundType)}
+                  style={{ width: '100%', background: 'var(--surface2)',
+                    border: '1px solid var(--border-md)', borderRadius: 10,
+                    padding: '10px 12px', fontSize: 12, color: 'var(--text)',
+                    appearance: 'none' }}>
+                  {MF_TYPES.map(t => (
+                    <option key={t} value={t}>{MF_META[t].emoji} {MF_META[t].label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Amount */}
             <div>
               <label style={{ fontSize: 10, color: 'var(--muted)',
@@ -512,6 +766,292 @@ export default function PortfolioPage() {
               opacity: saving ? 0.7 : 1 }}>
             {saving ? 'Saving…' : '+ Add Investment'}
           </button>
+        </div>
+
+        {/* ── SIP PLANS ── */}
+        <div style={{ background: 'var(--surface)', borderRadius: 18, padding: '22px 24px',
+          border: '1px solid var(--border)', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          marginBottom: 16 }}>
+
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
+              textTransform: 'uppercase', fontWeight: 500 }}>
+              SIP Plans
+            </div>
+            <button onClick={() => { setShowSipForm(f => !f); setSipError('') }}
+              style={{ background: showSipForm ? 'var(--surface2)' : 'var(--gold)', color: showSipForm ? 'var(--text)' : '#fff',
+                border: 'none', borderRadius: 10, padding: '6px 16px',
+                fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              {showSipForm ? 'Cancel' : '+ New SIP'}
+            </button>
+          </div>
+
+          {/* New SIP form */}
+          {showSipForm && (
+            <div style={{ background: 'var(--surface2)', borderRadius: 12, padding: '16px 18px',
+              border: '1px solid var(--border)', marginBottom: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+                {/* Investment Type */}
+                <div>
+                  <label style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, display: 'block', marginBottom: 5 }}>
+                    Investment Type
+                  </label>
+                  <select value={sipType} onChange={e => setSipType(e.target.value as InvestmentType)}
+                    style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border-md)',
+                      borderRadius: 10, padding: '9px 12px', fontSize: 12, color: 'var(--text)' }}>
+                    {SIP_TYPES.map(t => (
+                      <option key={t} value={t}>{TYPE_META[t].emoji} {TYPE_META[t].label}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* MF Type — only when type = mf */}
+                {sipType === 'mf' && (
+                  <div>
+                    <label style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, display: 'block', marginBottom: 5 }}>
+                      Fund Category
+                    </label>
+                    <select value={sipMfType} onChange={e => setSipMfType(e.target.value as MfType)}
+                      style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border-md)',
+                        borderRadius: 10, padding: '9px 12px', fontSize: 12, color: 'var(--text)' }}>
+                      {(Object.keys(MF_TYPE_META) as MfType[]).map(k => (
+                        <option key={k} value={k}>{MF_TYPE_META[k]}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {/* Amount */}
+                <div>
+                  <label style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, display: 'block', marginBottom: 5 }}>
+                    Amount (₹)
+                  </label>
+                  <input type="number" step="1" min="1" value={sipAmount}
+                    onChange={e => setSipAmount(e.target.value)} placeholder="e.g. 5000"
+                    style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border-md)',
+                      borderRadius: 10, padding: '9px 12px', fontSize: 12, color: 'var(--text)' }} />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
+                {/* Frequency */}
+                <div>
+                  <label style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, display: 'block', marginBottom: 5 }}>
+                    Frequency
+                  </label>
+                  <select value={sipFreq} onChange={e => setSipFreq(e.target.value as SipFrequency)}
+                    style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border-md)',
+                      borderRadius: 10, padding: '9px 12px', fontSize: 12, color: 'var(--text)' }}>
+                    <option value="monthly">Monthly</option>
+                    <option value="weekly">Weekly</option>
+                  </select>
+                </div>
+                {/* Start Date */}
+                <div>
+                  <label style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, display: 'block', marginBottom: 5 }}>
+                    Start Date
+                  </label>
+                  <input type="date" value={sipStartDate}
+                    onChange={e => setSipStartDate(e.target.value)}
+                    style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border-md)',
+                      borderRadius: 10, padding: '9px 12px', fontSize: 12, color: 'var(--text)' }} />
+                </div>
+                {/* Note */}
+                <div>
+                  <label style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, display: 'block', marginBottom: 5 }}>
+                    Note (optional)
+                  </label>
+                  <input type="text" value={sipNote} onChange={e => setSipNote(e.target.value)}
+                    placeholder="e.g. Retirement fund"
+                    style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border-md)',
+                      borderRadius: 10, padding: '9px 12px', fontSize: 12, color: 'var(--text)' }} />
+                </div>
+              </div>
+              {sipError && (
+                <div style={{ fontSize: 11, color: 'var(--red)', marginBottom: 10 }}>{sipError}</div>
+              )}
+              <button onClick={handleCreateSip} disabled={sipSaving}
+                style={{ background: 'var(--gold)', color: '#fff', border: 'none',
+                  borderRadius: 12, padding: '10px 28px', fontSize: 13, fontWeight: 600,
+                  opacity: sipSaving ? 0.7 : 1, cursor: 'pointer' }}>
+                {sipSaving ? 'Starting…' : 'Start SIP'}
+              </button>
+            </div>
+          )}
+
+          {/* SIP rows */}
+          {sipPlans.filter(s => s.status !== 'cancelled').length === 0 && !showSipForm && (
+            <div style={{ fontSize: 12, color: 'var(--muted)', padding: '8px 0' }}>
+              No SIPs set up yet. Start your first SIP with the button above.
+            </div>
+          )}
+
+          {sipPlans.filter(s => s.status !== 'cancelled').map(sip => {
+            const meta = TYPE_META[sip.investment_type as InvestmentType]
+            const isExpanded   = expandedSipId === sip.id
+            const isEditing    = editingSipId === sip.id
+            const isConfirming = cancelConfirmId === sip.id
+            const nextDate     = new Date(sip.next_execution_date + 'T00:00:00')
+              .toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+
+            return (
+              <div key={sip.id} style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginTop: 10 }}>
+                {/* SIP row header */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 16 }}>{meta?.emoji ?? '📈'}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+                        {meta?.label ?? sip.investment_type}
+                        {sip.mf_type && (
+                          <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 400 }}>
+                            {' • '}{MF_TYPE_META[sip.mf_type] ?? sip.mf_type}
+                          </span>
+                        )}
+                      </span>
+                      {sip.status === 'paused' && (
+                        <span style={{ fontSize: 9, background: 'rgba(184,146,74,0.15)',
+                          color: 'var(--gold)', borderRadius: 6, padding: '2px 7px', fontWeight: 700,
+                          letterSpacing: '.4px', textTransform: 'uppercase' }}>
+                          Paused
+                        </span>
+                      )}
+                    </div>
+                    {!isEditing && (
+                      <div style={{ fontSize: 12, color: 'var(--text-sm)' }}>
+                        <span style={{ fontFamily: 'Playfair Display, serif', fontWeight: 600 }}>
+                          {fmtAmt(sip.amount)}
+                        </span>
+                        {' / '}{sip.frequency}
+                        <span style={{ color: 'var(--muted)', marginLeft: 12 }}>
+                          Next: {sip.status === 'active' ? nextDate : '—'}
+                        </span>
+                        {sip.note && (
+                          <span style={{ color: 'var(--muted)', marginLeft: 12,
+                            fontSize: 10, fontStyle: 'italic' }}>"{sip.note}"</span>
+                        )}
+                      </div>
+                    )}
+                    {/* Inline edit form */}
+                    {isEditing && (
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
+                        <input type="number" value={editAmount} onChange={e => setEditAmount(e.target.value)}
+                          placeholder="New amount"
+                          style={{ width: 110, background: 'var(--surface2)', border: '1px solid var(--border-md)',
+                            borderRadius: 8, padding: '6px 10px', fontSize: 12, color: 'var(--text)' }} />
+                        <input type="text" value={editNote} onChange={e => setEditNote(e.target.value)}
+                          placeholder="Note (optional)"
+                          style={{ flex: 1, background: 'var(--surface2)', border: '1px solid var(--border-md)',
+                            borderRadius: 8, padding: '6px 10px', fontSize: 12, color: 'var(--text)' }} />
+                        <button onClick={() => handleSipEditSave(sip.id)}
+                          style={{ background: 'var(--gold)', color: '#fff', border: 'none',
+                            borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                          Save
+                        </button>
+                        <button onClick={() => setEditingSipId(null)}
+                          style={{ background: 'none', border: 'none', color: 'var(--muted)',
+                            fontSize: 12, cursor: 'pointer' }}>
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+                    {/* Cancel confirmation */}
+                    {isConfirming && (
+                      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
+                        Cancel this SIP? Past entries will be kept.{' '}
+                        <button onClick={() => handleSipCancel(sip.id)}
+                          style={{ background: 'none', border: 'none', color: 'var(--red)',
+                            fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 }}>
+                          Yes, cancel
+                        </button>
+                        {' · '}
+                        <button onClick={() => setCancelConfirmId(null)}
+                          style={{ background: 'none', border: 'none', color: 'var(--muted)',
+                            fontSize: 12, cursor: 'pointer', padding: 0 }}>
+                          No
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action buttons */}
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'flex-start' }}>
+                    <button onClick={() => handleLoadHistory(sip.id)}
+                      style={{ background: 'none', border: '1px solid var(--border-md)',
+                        borderRadius: 8, padding: '4px 10px', fontSize: 11,
+                        color: 'var(--muted)', cursor: 'pointer' }}>
+                      {isExpanded ? 'History ▴' : 'History ▾'}
+                    </button>
+                    {!isEditing && (
+                      <button onClick={() => { setEditingSipId(sip.id); setEditAmount(String(sip.amount)); setEditNote(sip.note ?? '') }}
+                        style={{ background: 'none', border: '1px solid var(--border-md)',
+                          borderRadius: 8, padding: '4px 10px', fontSize: 11,
+                          color: 'var(--text)', cursor: 'pointer' }}>
+                        Edit
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleSipPatch(sip.id, { status: sip.status === 'active' ? 'paused' : 'active' })}
+                      style={{ background: 'none', border: '1px solid var(--border-md)',
+                        borderRadius: 8, padding: '4px 10px', fontSize: 11,
+                        color: sip.status === 'active' ? 'var(--gold)' : 'var(--green)',
+                        cursor: 'pointer' }}>
+                      {sip.status === 'active' ? 'Pause' : 'Resume'}
+                    </button>
+                    <button onClick={() => setCancelConfirmId(isConfirming ? null : sip.id)}
+                      style={{ background: 'none', border: '1px solid rgba(192,57,43,0.25)',
+                        borderRadius: 8, padding: '4px 10px', fontSize: 11,
+                        color: 'var(--red)', cursor: 'pointer' }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+
+                {/* History panel */}
+                {isExpanded && (
+                  <div style={{ marginTop: 12, background: 'var(--surface2)', borderRadius: 10,
+                    padding: '12px 14px', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.4px',
+                      textTransform: 'uppercase', fontWeight: 600, marginBottom: 8 }}>
+                      Execution History
+                    </div>
+                    {historyLoading === sip.id && (
+                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>Loading…</div>
+                    )}
+                    {!historyLoading && sipHistory[sip.id] && sipHistory[sip.id].length === 0 && (
+                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>No entries yet.</div>
+                    )}
+                    {!historyLoading && sipHistory[sip.id] && sipHistory[sip.id].slice(0, 10).map((h, i) => (
+                      <div key={h.id} style={{ display: 'grid',
+                        gridTemplateColumns: '110px 1fr 100px',
+                        gap: 8, padding: '7px 0',
+                        borderBottom: i < Math.min(sipHistory[sip.id].length, 10) - 1
+                          ? '1px solid rgba(180,155,110,0.08)' : 'none',
+                        fontSize: 12 }}>
+                        <span style={{ color: 'var(--muted)' }}>
+                          {h.date ? new Date(h.date + 'T00:00:00').toLocaleDateString('en-IN',
+                            { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                        </span>
+                        <span style={{ color: 'var(--text)' }}>
+                          {TYPE_META[h.type as InvestmentType]?.emoji} {TYPE_META[h.type as InvestmentType]?.label ?? h.type}
+                        </span>
+                        <span style={{ color: 'var(--text)', textAlign: 'right', fontWeight: 600 }}>
+                          {fmtAmt(h.amount)}
+                        </span>
+                      </div>
+                    ))}
+                    {!historyLoading && sipHistory[sip.id] && sipHistory[sip.id].length > 10 && (
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
+                        Showing 10 of {sipHistory[sip.id].length} entries —{' '}
+                        <span style={{ color: 'var(--gold)', cursor: 'pointer' }}
+                          onClick={() => router.push('/portfolio')}>
+                          view all in investments log
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
 
         {/* ── INVESTMENTS TABLE ── */}
@@ -581,6 +1121,9 @@ export default function PortfolioPage() {
                       fontWeight:500 }}>
                       {TYPE_META[inv.type as InvestmentType]?.emoji ?? ''}{' '}
                       {TYPE_META[inv.type as InvestmentType]?.label ?? inv.type}
+                      {inv.type === 'mf' && inv.mfType && (
+                        <>{' '}•{' '}<span style={{ color:'var(--gold)', fontWeight:600 }}>{MF_META[inv.mfType].label}</span></>
+                      )}
                     </span>
                     {inv.note && (
                       <span style={{ fontSize:10, color:'var(--muted)',
@@ -645,6 +1188,18 @@ export default function PortfolioPage() {
                 {fmtAmt(investments.reduce((s, i) => s + i.amount, 0))}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ── MF SUB-TYPE BREAKDOWN ── */}
+        {investments.some(inv => inv.type === 'mf' && inv.mfType) && (
+          <div style={{ background: 'var(--surface)', borderRadius: 18, padding: '20px 22px',
+            border: '1px solid var(--border)', marginBottom: 16 }}>
+            <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
+              textTransform: 'uppercase', fontWeight: 500, marginBottom: 16 }}>
+              Mutual Fund Breakdown
+            </div>
+            <MFDonutChart investments={investments} />
           </div>
         )}
 

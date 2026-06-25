@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LEVEL_NAMES_ARR } from '@/lib/valam'
+import { useTheme } from '../../../context/themecontext'
 import Link from 'next/link'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -43,7 +44,7 @@ export default function TopicDetailPage() {
   const level      = Number(params?.level)
   const topicOrder = Number(params?.topicOrder)
 
-  const [dark, setDark]               = useState(false)
+  const { dark, toggleTheme }         = useTheme()
   const [loading, setLoading]         = useState(true)
   const [notFound, setNotFound]       = useState(false)
   const [subConcepts, setSubConcepts] = useState<SubConcept[]>([])
@@ -52,10 +53,6 @@ export default function TopicDetailPage() {
   const [showAnswer, setShowAnswer]   = useState(false)
   const [completing, setCompleting]   = useState(false)
   const [token, setToken]             = useState<string | null>(null)
-
-  useEffect(() => {
-    document.body.classList.toggle('dark', dark)
-  }, [dark])
 
   const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
 
@@ -200,7 +197,7 @@ export default function TopicDetailPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button onClick={() => setDark(!dark)}
+          <button onClick={toggleTheme}
             style={{ background: 'var(--surface2)', border: '1px solid var(--border)',
               borderRadius: 20, padding: '4px 12px', fontSize: 11,
               color: 'var(--muted)', cursor: 'pointer' }}>

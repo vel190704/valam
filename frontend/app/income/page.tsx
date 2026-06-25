@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useTheme } from '../context/themecontext'
 
 type IncomeCategory =
   | 'salary' | 'freelance' | 'business'
@@ -234,7 +235,7 @@ export default function IncomePage() {
   const router = useRouter()
   const [entries, setEntries]         = useState<IncomeEntry[]>([])
   const [loading, setLoading]         = useState(true)
-  const [dark, setDark]               = useState(false)
+  const { dark, toggleTheme }         = useTheme()
   const [savingsRate, setSavingsRate]               = useState(0)
   const [monthlySavingsRate, setMonthlySavingsRate] = useState<number | null>(null)
 
@@ -244,10 +245,6 @@ export default function IncomePage() {
   const [fNote, setFNote]     = useState('')
   const [saving, setSaving]   = useState(false)
   const [formErr, setFormErr] = useState('')
-
-  useEffect(() => {
-    document.body.classList.toggle('dark', dark)
-  }, [dark])
 
   const load = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -389,7 +386,7 @@ export default function IncomePage() {
           <span style={{ fontFamily:'Playfair Display,serif', fontWeight:600,
             fontSize:16, color:'var(--text)' }}>VALAM · Income &amp; Savings</span>
         </div>
-        <button onClick={() => setDark(!dark)}
+        <button onClick={toggleTheme}
           style={{ background:'var(--surface2)', border:'1px solid var(--border)',
             borderRadius:20, padding:'4px 12px', fontSize:11,
             color:'var(--muted)', cursor:'pointer' }}>

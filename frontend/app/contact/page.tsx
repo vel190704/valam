@@ -47,6 +47,12 @@ export default function ContactPage() {
             })
         }
       )
+      if(res.status === 503){
+        const body = await res.json().catch(() => ({}))
+        const fallback = body.fallback ?? 'valamhq@gmail.com'
+        setError(`Our email service is being set up. Please reach us directly at ${fallback}`)
+        return
+      }
       if(!res.ok){
         throw new Error()
       }
@@ -57,7 +63,7 @@ export default function ContactPage() {
     }
     catch{
       setError(
-        'Failed to send message.'
+        'Something went wrong. Please try again or email us at valamhq@gmail.com'
       )
     }
     finally{

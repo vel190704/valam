@@ -85,14 +85,22 @@ function buildFallbackTasks(deterministicTasks) {
   return base
 }
 
-const SYSTEM_PROMPT = `You are VALAM AI — a personalised wealth coach for Indian retail investors.
-Your job is to generate 5 specific, actionable tasks based on the user's REAL financial data.
+const SYSTEM_PROMPT = `You are VALAM AI — a personalised wealth coach for Indian retail investors following the VALAM framework.
+
+VALAM TASK PRIORITY FRAMEWORK (strictly follow this order when generating tasks):
+Priority 1 — Emergency Fund: If emergencyMonthsCovered < 6, the first task MUST address building an emergency fund to cover 6 months of expenses (target ₹ amount provided)
+Priority 2 — Active Investing: If hasActiveSIP is false and the user has any savings capacity, recommend starting a SIP immediately
+Priority 3 — Savings Rate: If savingsRate < 10%, focus tasks on increasing savings rate before portfolio growth
+Priority 4 — Financial Knowledge: If knowledgeScore ≤ 4 and completedTopics < 5, recommend completing a learning module
+Priority 5 — Portfolio Diversification: If allocationByType shows fewer than 2 asset classes, recommend diversifying
+Priority 6 — Net Worth Growth: Guide on reducing liabilities or systematically growing assets
+Priority 7 — Level Progression: Tasks specific to advancing from currentLevel → nextLevel
 
 RULES (non-negotiable):
+- Always evaluate Priority 1 first — emergency fund takes precedence over everything else
 - Never recommend specific stocks, mutual fund names, or securities
 - Never mention guaranteed returns or specific percentage return figures like "12% annually"
-- Frame advice around fixing the weakest foundation first — not maximising wealth
-- Use real numbers from the user's data (₹ amounts, savings rate %, level names, topic counts)
+- Use real numbers from the user's data (₹ amounts, savings rate %, level names, months covered)
 - Tasks must be specific and measurable (e.g. "Increase your monthly SIP from ₹3,000 to ₹5,000" not "increase SIP")
 - Keep each task explanation to 2 sentences maximum
 - Never frame around maximizing returns — frame around building a strong financial foundation
@@ -125,7 +133,7 @@ Generate exactly 5 personalised tasks for this user.
 ${up.nextLevel
   ? `Focus tasks on what this user needs to do to advance from ${up.currentLevel} → ${up.nextLevel}.`
   : `This user is at the maximum level — focus on maintaining and growing their wealth.`}
-Use their REAL numbers: net worth ₹${fp.netWorth.toLocaleString('en-IN')}, monthly income ${fp.monthlyIncomeFormatted}, savings rate ${fp.savingsRate}%, total invested ₹${pp.totalInvested.toLocaleString('en-IN')}, level ${up.currentLevel}.
+Key numbers: net worth ₹${fp.netWorth.toLocaleString('en-IN')}, monthly income ${fp.monthlyIncomeFormatted}, savings rate ${fp.savingsRate}%, total invested ₹${pp.totalInvested.toLocaleString('en-IN')}, level ${up.currentLevel}, emergency fund ${fp.emergencyMonthsCovered ?? 0} months covered (target ₹${(fp.emergencyFundTarget ?? 0).toLocaleString('en-IN')}), active SIP: ${fp.hasActiveSIP ? 'Yes' : 'No'}, equity ${pp.equityPct ?? 0}%, debt ${pp.debtPct ?? 0}%.
 
 Respond ONLY with a valid JSON array — no markdown fences, no preamble, no trailing text:
 [

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useTheme } from '../context/themecontext'
 
 interface Milestone {
   id: number
@@ -39,19 +40,8 @@ export default function MilestonesPage() {
   const [milestones, setMilestones]       = useState<Milestone[]>([])
   const [unlockedCount, setUnlockedCount] = useState(0)
   const [loading, setLoading]             = useState(true)
-  const [dark, setDark]                   = useState(false)
+  const { dark, toggleTheme }             = useTheme()
   const [expanded, setExpanded]           = useState<number | null>(null)
-
-  useEffect(() => {
-    const isDark = document.body.classList.contains('dark') ||
-                   localStorage.getItem('theme') === 'dark'
-    setDark(isDark)
-    document.body.classList.toggle('dark', isDark)
-  }, [])
-
-  useEffect(() => {
-    document.body.classList.toggle('dark', dark)
-  }, [dark])
 
   useEffect(() => {
     async function load() {
@@ -114,7 +104,7 @@ export default function MilestonesPage() {
             Milestones
           </span>
         </div>
-        <button onClick={() => setDark(d => !d)}
+        <button onClick={toggleTheme}
           style={{ background:'none', border:'none', cursor:'pointer',
             color:'var(--muted)', fontSize:16 }}>
           {dark ? '☀️' : '🌙'}

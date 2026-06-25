@@ -116,7 +116,9 @@ export default function AllocationPage() {
       if (!res.ok) { setError('Failed to load data'); setLoading(false); return }
 
       const json = await res.json()
-      setValamLevel(json.profile?.valamLevel ?? 3)
+      const cs = Number(json.calculatedScore ?? json.currentScore ?? 0)
+      const liveLevel = cs >= 7.5 ? 8 : (Math.floor(cs) || 1)
+      setValamLevel(liveLevel)
       setInvestments(json.investments ?? [])
       setLoading(false)
     }
@@ -238,7 +240,7 @@ export default function AllocationPage() {
         {/* Level badge */}
         <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 20 }}>
           Suggestions are tailored for{' '}
-          <span style={{ color: 'var(--gold)', fontWeight: 700 }}>Level {valamLevel}</span>
+          <span data-testid="alloc-current-level" data-level={valamLevel} style={{ color: 'var(--gold)', fontWeight: 700 }}>Level {valamLevel}</span>
           {' '}investors · Portfolio total{' '}
           <span style={{ color: 'var(--text)', fontWeight: 600 }}>{fmt(totalAmt)}</span>
         </div>
@@ -403,7 +405,7 @@ export default function AllocationPage() {
                   Analysing your allocation…
                 </div>
               ) : insight ? (
-                <div style={{ fontSize: 13, color: 'var(--text-sm)', lineHeight: 1.65 }}>
+                <div data-testid="ai-insight-text" style={{ fontSize: 13, color: 'var(--text-sm)', lineHeight: 1.65 }}>
                   {insight}
                 </div>
               ) : (

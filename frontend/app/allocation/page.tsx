@@ -254,7 +254,7 @@ const totalMF =
 
       const suggestedEquity =
   getSuggestedEquityAllocation(
-    valamLevelName
+    age, risk
   )
 
   const actualEquityByLabel = {

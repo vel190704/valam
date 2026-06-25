@@ -41,9 +41,9 @@ export interface VALAMResult {
     savingsScore:         number
     incomeScore:          number
     experienceScore:      number
-    ageScore:             number
+    //ageScore:             number
     wealthVelocity:       number
-    financialHealthScore: number  // kept for task engine FH override
+    //financialHealthScore: number  // kept for task engine FH override
   }
 }
 
@@ -173,12 +173,12 @@ export function calculateVALAM(input: VALAMInput): VALAMResult {
   const savingsScore         = scoreSavings(input.savingsRate)
   const incomeScore          = scoreIncome(input.income)
   const experienceScore      = scoreExperience(input.experience)
-  const ageScore             = scoreAge(input.age)
+ /* const ageScore             = scoreAge(input.age)
   const financialHealthScore = scoreFinancialHealth(
     input.emergencyFund    ?? null,
     input.highInterestDebt ?? null,
     input.healthInsurance  ?? null,
-  )
+  )*/
 
   let netWorthScore:      number
   let wealthVelocityScore: number
@@ -209,7 +209,6 @@ export function calculateVALAM(input: VALAMInput): VALAMResult {
 
   const rawPotential =
     0.45 * savingsScore +
-    0.35 * ageScore +
     0.10 * incomeScore +
     0.10 * experienceScore
 
@@ -231,9 +230,9 @@ export function calculateVALAM(input: VALAMInput): VALAMResult {
       savingsScore,
       incomeScore,
       experienceScore,
-      ageScore,
+      //ageScore,
       wealthVelocity,
-      financialHealthScore,
+      //financialHealthScore,
     },
   }
 }

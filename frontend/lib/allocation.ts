@@ -122,7 +122,8 @@ export const MF_TO_EQUITY_CATEGORY: Record<string, string> = {
 }
 
 export function getSuggestedEquityAllocation(
-  levelName: string
+  age: number,
+  risk: RiskLevel
 ): EquityAllocationItem[] {
 
   const COLORS = {
@@ -132,49 +133,85 @@ export function getSuggestedEquityAllocation(
     Small: '#DBA512',
   }
 
-  switch (levelName) {
+  const bucket =
+  age <= 40 ? '18-40'
+  : age <= 60 ? '40-60'
+  : '60+'
 
-    case 'Seed':
-      return [
-        { label: 'Index', pct: 70, color: COLORS.Index },
-        { label: 'Flexi', pct: 30, color: COLORS.Flexi },
-      ]
+  if (risk === 'low') {
 
-    case 'Explorer':
-      return [
-        { label: 'Index', pct: 50, color: COLORS.Index },
-        { label: 'Flexi', pct: 30, color: COLORS.Flexi },
-        { label: 'Mid', pct: 20, color: COLORS.Mid },
-      ]
+  if (bucket === '18-40')
+    return [
+      { label: 'Index', pct: 50, color: COLORS.Index },
+      { label: 'Flexi', pct: 40, color: COLORS.Flexi },
+      { label: 'Mid', pct: 10, color: COLORS.Mid },
+      { label: 'Small', pct: 0, color: COLORS.Small },
+    ]
 
-    case 'Builder':
-      return [
-        { label: 'Index', pct: 50, color: COLORS.Index },
-        { label: 'Flexi', pct: 25, color: COLORS.Flexi },
-        { label: 'Mid', pct: 25, color: COLORS.Mid },
-      ]
+  if (bucket === '40-60')
+    return [
+      { label: 'Index', pct: 60, color: COLORS.Index },
+      { label: 'Flexi', pct: 35, color: COLORS.Flexi },
+      { label: 'Mid', pct: 5, color: COLORS.Mid },
+      { label: 'Small', pct: 0, color: COLORS.Small },
+    ]
 
-    case 'Accelerator':
-      return [
-        { label: 'Index', pct: 40, color: COLORS.Index },
-        { label: 'Flexi', pct: 25, color: COLORS.Flexi },
-        { label: 'Mid', pct: 25, color: COLORS.Mid },
-        { label: 'Small', pct: 10, color: COLORS.Small },
-      ]
+  return [
+    { label: 'Index', pct: 70, color: COLORS.Index },
+    { label: 'Flexi', pct: 30, color: COLORS.Flexi },
+    { label: 'Mid', pct: 0, color: COLORS.Mid },
+    { label: 'Small', pct: 0, color: COLORS.Small },
+  ]
+}
 
-    case 'Achiever':
-      return [
-        { label: 'Index', pct: 35, color: COLORS.Index },
-        { label: 'Flexi', pct: 25, color: COLORS.Flexi },
-        { label: 'Mid', pct: 25, color: COLORS.Mid },
-        { label: 'Small', pct: 15, color: COLORS.Small },
-      ]
+if (risk === 'medium') {
 
-    default:
-      return [
-        { label: 'Index', pct: 50, color: COLORS.Index },
-        { label: 'Flexi', pct: 25, color: COLORS.Flexi },
-        { label: 'Mid', pct: 25, color: COLORS.Mid },
-      ]
-  }
+  if (bucket === '18-40')
+    return [
+      { label: 'Index', pct: 40, color: COLORS.Index },
+      { label: 'Flexi', pct: 35, color: COLORS.Flexi },
+      { label: 'Mid', pct: 20, color: COLORS.Mid },
+      { label: 'Small', pct: 5, color: COLORS.Small },
+    ]
+
+  if (bucket === '40-60')
+    return [
+      { label: 'Index', pct: 50, color: COLORS.Index },
+      { label: 'Flexi', pct: 35, color: COLORS.Flexi },
+      { label: 'Mid', pct: 15, color: COLORS.Mid },
+      { label: 'Small', pct: 0, color: COLORS.Small },
+    ]
+
+  return [
+    { label: 'Index', pct: 60, color: COLORS.Index },
+    { label: 'Flexi', pct: 35, color: COLORS.Flexi },
+      { label: 'Mid', pct: 5, color: COLORS.Mid },
+      { label: 'Small', pct: 0, color: COLORS.Small },
+  ]
+}
+
+if (bucket === '18-40')
+  return [
+    { label: 'Index', pct: 30, color: COLORS.Index },
+    { label: 'Flexi', pct: 30, color: COLORS.Flexi },
+    { label: 'Mid', pct: 25, color: COLORS.Mid },
+    { label: 'Small', pct: 15, color: COLORS.Small },
+  ]
+
+if (bucket === '40-60')
+  return [
+    { label: 'Index', pct: 40, color: COLORS.Index },
+    { label: 'Flexi', pct: 35, color: COLORS.Flexi },
+    { label: 'Mid', pct: 20, color: COLORS.Mid },
+    { label: 'Small', pct: 5, color: COLORS.Small },
+  ]
+
+return [
+  { label: 'Index', pct: 50, color: COLORS.Index },
+  { label: 'Flexi', pct: 35, color: COLORS.Flexi },
+  { label: 'Mid', pct: 15, color: COLORS.Mid },
+  { label: 'Small', pct: 0, color: COLORS.Small },
+]
+
+
 }

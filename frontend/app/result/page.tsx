@@ -19,7 +19,6 @@ export default function ResultPage() {
   const [result, setResult] = useState<VALAMResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [requiresSignup, setRequiresSignup] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     if (hasSaved.current) return
@@ -28,7 +27,7 @@ export default function ResultPage() {
     async function calculateAndSave() {
       const name        = sessionStorage.getItem('valam_name') ?? ''
       const age         = Number(sessionStorage.getItem('valam_age') ?? 0)
-      const experience  = sessionStorage.getItem('valam_experience') ?? 'beginner'
+      const experience  = sessionStorage.getItem('valam_knowledge') ?? 'beginner'
       const income      = sessionStorage.getItem('valam_income') ?? '<3L'
       const savingsRate = sessionStorage.getItem('valam_savings') ?? '<2'
       const investments = sessionStorage.getItem('valam_investments') ?? '<10k'
@@ -40,6 +39,7 @@ export default function ResultPage() {
         savingsRate: savingsRate as SavingsKey,
         investments: investments as InvestmentsKey,
         experience:  experience as ExperienceKey,
+        
       })
       setResult(calculated)
       setLoading(false)
@@ -47,13 +47,41 @@ export default function ResultPage() {
       const { data: { session } } = await supabase.auth.getSession()
 
       if (!session?.user) {
+        localStorage.setItem(
+    'pendingAssessment',
+    JSON.stringify({
+      name,
+      age,
+      income,
+      savingsRate,
+      investments,
+      experience,
+      goal,
+
+      valamScore: calculated.positionScore,
+      valamLevel: calculated.positionLevel,
+      valamLevelName: calculated.positionLevelName,
+
+     // potentialScore: calculated.potentialScore,
+      potentialLevel: calculated.potentialLevel,
+      potentialLevelName: calculated.potentialLevelName,
+
+      breakdown: {
+        savingsScore: calculated.breakdown.savingsScore,
+        investmentsScore: calculated.breakdown.investmentVelocityScore,
+        incomeScore: calculated.breakdown.incomeScore,
+        experienceScore: calculated.breakdown.experienceScore,
+       // ageScore: calculated.breakdown.ageScore,
+      },
+    })
+  )
         setRequiresSignup(true)
         return
       }
 
       try {
         const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
-        const saveRes = await fetch(`${BASE}/profile/save-assessment`, {
+        await fetch(`${BASE}/profile/save-assessment`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -70,30 +98,19 @@ export default function ResultPage() {
             valamScore:         calculated.positionScore,
             valamLevel:         calculated.positionLevel,
             valamLevelName:     calculated.positionLevelName,
-            potentialScore:     calculated.potentialScore,
             potentialLevel:     calculated.potentialLevel,
             potentialLevelName: calculated.potentialLevelName,
-            wealthVelocity:     calculated.breakdown.wealthVelocity,
+            
             breakdown: {
               savingsScore:     calculated.breakdown.savingsScore,
-              investmentsScore: calculated.breakdown.wealthVelocityScore,
+              investmentsScore: calculated.breakdown.investmentVelocityScore,
               incomeScore:      calculated.breakdown.incomeScore,
               experienceScore:  calculated.breakdown.experienceScore,
-              ageScore:         calculated.breakdown.ageScore,
             },
           }),
         })
-        if (!saveRes.ok) {
-          const body = await saveRes.text()
-          console.error('save-assessment failed:', saveRes.status, body)
-          let msg: string
-          try { msg = (JSON.parse(body) as { error?: string; detail?: string }).error ?? `HTTP ${saveRes.status}` }
-          catch { msg = `HTTP ${saveRes.status}` }
-          setSaveError(msg)
-        }
       } catch (err) {
         console.error('Failed to save profile:', err)
-        setSaveError('Network error — check your connection and try again.')
       }
     }
 
@@ -224,34 +241,6 @@ export default function ResultPage() {
           </div>
         )}
 
-        {/* ── Save error banner ── */}
-        {saveError && (
-          <div style={{
-            maxWidth: 600,
-            margin: '0 auto 24px',
-            background: 'rgba(192,57,43,0.12)',
-            border: '1px solid rgba(192,57,43,0.4)',
-            borderRadius: 16,
-            padding: '14px 20px',
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 10,
-          }}>
-            <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
-            <div>
-              <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13,
-                fontWeight: 600, color: '#f5a5a5', marginBottom: 4 }}>
-                Score could not be saved
-              </div>
-              <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12,
-                color: 'rgba(245,240,232,0.7)', lineHeight: 1.5 }}>
-                {saveError} — your result is shown below but was not persisted.
-                Refresh and try again, or contact support if the problem persists.
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* CARD 1: Current Position */}
         <div style={{ background: 'rgba(245,240,232,0.95)',
           borderRadius: '20px', padding: '36px', marginBottom: '20px',
@@ -352,7 +341,7 @@ export default function ResultPage() {
               </div>
               <div style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.85rem',
                 color: 'rgba(245,240,232,0.5)', marginTop: '6px' }}>
-                Score: {result.potentialScore}
+                
               </div>
               <p style={{ fontFamily: "'Cormorant Garamond', serif",
                 color: 'rgba(245,240,232,0.6)', fontSize: '0.95rem',

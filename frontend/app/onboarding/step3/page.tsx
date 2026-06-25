@@ -26,11 +26,16 @@ const savingsOptions = [
 ]
 
 const investmentOptions = [
-  { value:'<10k',   label:'Less than ₹10,000' },
-  { value:'10k-1L', label:'₹10,000 – ₹1L' },
-  { value:'1L-5L',  label:'₹1L – ₹5L' },
-  { value:'5L-25L', label:'₹5L – ₹25L' },
-  { value:'25L+',   label:'₹25L+' },
+  { value: '<10k',    label: 'Less than ₹10,000' },
+  { value: '10k-50k', label: '₹10,000 – ₹50,000' },
+  { value: '50k-1L',  label: '₹50,000 – ₹1 Lakh' },
+  { value: '1L-2L',   label: '₹1 Lakh – ₹2 Lakh' },
+  { value: '2L-5L',   label: '₹2 Lakh – ₹5 Lakh' },
+  { value: '5L-10L',  label: '₹5 Lakh – ₹10 Lakh' },
+  { value: '10L-20L', label: '₹10 Lakh – ₹20 Lakh' },
+  { value: '20L-35L', label: '₹20 Lakh – ₹35 Lakh' },
+  { value: '35L-50L', label: '₹35 Lakh – ₹50 Lakh' },
+  { value: '50L+',    label: 'More than ₹50 Lakh' },
 ]
 
 const selectStyle = {
@@ -93,7 +98,7 @@ export default function Step3() {
 
         <h2 style={{ fontFamily:"'Playfair Display', serif", fontSize:'1.8rem',
           color:'#2a1a0e', marginBottom:'8px', textAlign:'center' }}>
-          We'll tailor your financial roadmap based on your investing knowledge
+          We&apos;ll tailor your financial roadmap based on your investing knowledge
         </h2>
         <p style={{ fontFamily:"'Cormorant Garamond', serif", color:'#5a3e28',
           textAlign:'center', marginBottom:'40px' }}>

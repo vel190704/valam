@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LEVEL_NAMES_ARR } from '@/lib/valam'
-import { getAllocation } from '@/lib/allocation'
 import Link from 'next/link'
 
 interface DashboardData {
@@ -233,6 +232,37 @@ export default function DashboardPage() {
   const potentialLevel = data?.potentialLevel ?? Math.min(8, currentLevel + 2)
 
   const portfolioTotal = investments.reduce((s, i) => s + i.amount, 0)
+
+  useEffect(() => {
+  async function updateTotalInvestments() {
+    if (investments.length === 0) return
+
+    const portfolioTotal = investments.reduce(
+      (sum, inv) => sum + inv.amount,
+      0
+    )
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+
+    const BASE =
+      process.env.NEXT_PUBLIC_BACKEND_URL ??
+      'http://localhost:5000'
+
+    await fetch(`${BASE}/profile/inv`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        totalinvestments: portfolioTotal,
+      }),
+    })
+  }
+
+  updateTotalInvestments()
+}, [investments])
 
   const TYPE_COLORS: Record<string, string> = {
     mf: '#B8924A', stock: '#5B8DB8', fd: '#E07B54',
@@ -471,20 +501,9 @@ export default function DashboardPage() {
               </span>
             </div>
           )}
-          {data.scoreStatus === 'regression' && (
-            <div style={{
-              marginBottom: 14,
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: 'rgba(184,146,74,0.10)', border: '1px solid rgba(184,146,74,0.3)',
-              borderRadius: 20, padding: '5px 14px'
-            }}>
-              <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700 }}>
-                ⚠ Score dipped — follow today's tasks to recover
-              </span>
-            </div>
-          )}
+          
 
-          {/* WEALTH JOURNEY METER */}
+        {/* WEALTH JOURNEY METER */}
           <div style={{ position: 'relative', padding: '6px 0 0' }}>
             <div style={{
               position: 'absolute', top: 18, left: '6.25%', right: '6.25%',
@@ -551,147 +570,7 @@ export default function DashboardPage() {
               })}
             </div>
 
-            {/* DUAL-HANDLE SLIDER */}
-            {(() => {
-              const pctToNext = roadmap?.task?.progressToNextLevel ??
-                Math.round((liveScore - Math.floor(liveScore)) * 100)
-
-              const scoreToTrackPct = (score: number, level: number): number => {
-                if (level >= 8) return 100
-                if (level === 7) return ((6 + Math.min(1, (score - 7.0) / 0.5)) / 7) * 100
-                return (((level - 1) + Math.max(0, Math.min(1, score - level))) / 7) * 100
-              }
-
-              const currentTrackPct = scoreToTrackPct(liveScore, liveLevel)
-              const potentialTrackPct = data.potentialScore > 0
-                ? scoreToTrackPct(data.potentialScore, potentialLevel)
-                : ((potentialLevel - 1) / 7) * 100
-
-              return (
-                <>
-                  <div style={{
-                    display: 'flex', justifyContent: 'space-between',
-                    marginTop: 14, marginBottom: 8
-                  }}>
-                    <div>
-                      <div style={{
-                        fontSize: 9, color: 'var(--gold)', fontWeight: 700,
-                        letterSpacing: '.4px', textTransform: 'uppercase'
-                      }}>Current</div>
-                      <div style={{
-                        fontFamily: 'Playfair Display,serif', fontSize: 13,
-                        color: 'var(--text)'
-                      }}>{liveLevelName}</div>
-                      <div style={{ fontSize: 10, color: 'var(--muted)' }}>
-                        Score {liveScore.toFixed(2)}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{
-                        fontSize: 9, color: 'var(--bronze)', fontWeight: 700,
-                        letterSpacing: '.4px', textTransform: 'uppercase'
-                      }}>Potential</div>
-                      <div style={{
-                        fontFamily: 'Playfair Display,serif', fontSize: 13,
-                        color: 'var(--text)'
-                      }}>{data.potentialLevelName}</div>
-                      <div style={{ fontSize: 10, color: 'var(--muted)' }}>
-                        Level {potentialLevel}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Track container — 6.25% margins align handles with node centers */}
-                  <div style={{ position: 'relative', height: 60, margin: '0 6.25%' }}>
-                    {/* Track background */}
-                    <div style={{
-                      position: 'absolute', top: 28, left: 0, right: 0, height: 4,
-                      background: 'var(--surface2)', borderRadius: 4
-                    }}>
-                      <div style={{
-                        position: 'absolute', left: 0,
-                        width: `${currentTrackPct}%`, height: '100%',
-                        background: 'linear-gradient(90deg,var(--gold),var(--gold-lt))',
-                        borderRadius: 4
-                      }} />
-                      {potentialTrackPct > currentTrackPct && (
-                        <div style={{
-                          position: 'absolute', left: `${currentTrackPct}%`,
-                          width: `${potentialTrackPct - currentTrackPct}%`,
-                          height: '100%', background: 'rgba(143,104,40,0.18)',
-                          borderRadius: 4
-                        }} />
-                      )}
-                    </div>
-
-                    {/* % to next badge above current handle */}
-                    <div style={{
-                      position: 'absolute', left: `${currentTrackPct}%`, top: 2,
-                      transform: 'translateX(-50%)', whiteSpace: 'nowrap',
-                      background: 'var(--gold)', color: '#fff', fontSize: 8,
-                      fontWeight: 700, padding: '1px 5px', borderRadius: 4
-                    }}>
-                      {pctToNext}% to {LEVEL_NAMES_ARR[Math.min(7, currentLevel)]}
-                    </div>
-
-                    {/* Current handle — 24px circle, center at top:28 → top:16 */}
-                    <div style={{
-                      position: 'absolute', left: `${currentTrackPct}%`, top: 16,
-                      transform: 'translateX(-50%)',
-                      width: 24, height: 24, borderRadius: '50%', background: 'var(--gold)',
-                      color: '#fff', fontSize: 10, fontWeight: 700,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      boxShadow: '0 0 0 5px rgba(184,146,74,0.15)'
-                    }}>
-                      {currentLevel}
-                    </div>
-                    <div style={{
-                      position: 'absolute', left: `${currentTrackPct}%`, top: 44,
-                      transform: 'translateX(-50%)', whiteSpace: 'nowrap',
-                      fontSize: 8, color: 'var(--gold)', fontWeight: 600
-                    }}>
-                      {liveLevelName}
-                    </div>
-
-                    {/* Potential handle — 20px circle, center at top:28 → top:18 */}
-                    <div style={{
-                      position: 'absolute', left: `${potentialTrackPct}%`, top: 18,
-                      transform: 'translateX(-50%)',
-                      width: 20, height: 20, borderRadius: '50%',
-                      background: 'rgba(143,104,40,0.08)',
-                      border: '2px dashed var(--bronze)', color: 'var(--bronze)',
-                      fontSize: 9, fontWeight: 700,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                      {potentialLevel}
-                    </div>
-                    <div style={{
-                      position: 'absolute', left: `${potentialTrackPct}%`, top: 42,
-                      transform: 'translateX(-50%)', whiteSpace: 'nowrap',
-                      fontSize: 8, color: 'var(--bronze)', fontWeight: 600
-                    }}>
-                      {data.potentialLevelName}
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
-                    {[
-                      { color: 'var(--gold)', label: 'Current position', dashed: false },
-                      { color: 'var(--bronze)', label: 'Potential', dashed: true },
-                    ].map(l => (
-                      <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <div style={{
-                          width: 8, height: 8, borderRadius: '50%',
-                          background: l.color,
-                          border: l.dashed ? '1.5px dashed var(--bronze)' : 'none'
-                        }} />
-                        <span style={{ fontSize: 9, color: 'var(--muted)' }}>{l.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )
-            })()}
+            
           </div>
         </div>
 

@@ -11,6 +11,7 @@ import { generateCoachingExplanation } from "./lib/aiCoach.js";
 import { getCachedRoadmap, setCachedRoadmap } from "./lib/roadmapCache.js";
 import { getFinancialYearStart } from "./lib/financialYear.js";
 import { Resend } from "resend";
+import { executeDueSIPs,advanceSipDate } from "./lib/sipCron.js";
 
 dotenv.config();
 dotenv.config({ path: ".env.local" });           // loads GROQ_API_KEY from backend/.env.local
@@ -346,6 +347,7 @@ app.get("/profile", requireUser, async (req, res) => {
     .filter(r => NW_LIABILITY_CATS.has(r.category))
     .reduce((s, r) => s + Number(r.amount), 0);
   const computedNetWorth = totalAssets - totalLiabilities;
+ // console.log(computedNetWorth)
   // ── Compute live savings rate and income from FY transactions ──────────────
   const fyStart = getFinancialYearStart();
   const fyDate  = new Date(fyStart);
@@ -380,7 +382,7 @@ app.get("/profile", requireUser, async (req, res) => {
       age:             Number(profile.age),
       income:          liveIncomeKey,
       savingsRate:     liveSavingsKey,
-      investments:     profile.investments,
+      investments:     profile.totalinvestments,
       experience:      profile.experience,
       netWorth:        computedNetWorth,
       emergencyFund:   profile.emergency_fund    ?? null,
@@ -389,6 +391,7 @@ app.get("/profile", requireUser, async (req, res) => {
     });
 
     calculatedScore = fresh.positionScore;
+   // console.log(calculatedScore)
     const storedCurrent = profile.current_score ?? profile.valam_score ?? 0;
 
     if (fresh.positionScore > storedCurrent) {
@@ -518,6 +521,29 @@ app.post("/profile/save-assessment", requireUser, async (req, res) => {
 
   return res.status(201).json({ profileId: data.id });
 });
+
+app.post('/profile/inv', requireUser, async (req, res) => {
+  try {
+    const { totalinvestments } = req.body
+
+    const { error } = await supabaseAdmin
+      .from('profiles')
+      .update({
+        totalinvestments,
+      })
+      .eq('user_id', req.user.id)
+
+    if (error) {
+      console.error(error)
+      return res.status(500).json({ error: 'Failed to update investments' })
+    }
+
+    res.json({ success: true })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
 
 // ── Recommendations ───────────────────────────────────────────────────────────
 app.get("/recommendations", (req, res) => {
@@ -1074,8 +1100,184 @@ app.post('/contact', async (req, res) => {
   }
 })
 
+// GET /sips — list all active/paused SIPs for the logged-in user
+app.get('/sips', requireUser, async (req, res) => {
+const userId = req.user.id
+
+const { data: sips, error } = await supabaseAdmin
+.from('sip_plans')
+.select('*')
+.eq('user_id', userId)
+.neq('status', 'cancelled')
+.order('created_at', { ascending: false })
+
+if (error) return res.status(500).json({ error: error.message })
+
+// Attach history count to each SIP
+const sipsWithCount = await Promise.all(
+(sips ?? []).map(async sip => {
+const { count } = await supabaseAdmin
+.from('investments')
+.select('*', { count: 'exact', head: true })
+.eq('sip_id', sip.id)
+return { ...sip, history_count: count ?? 0 }
+})
+)
+
+res.json({ sips: sipsWithCount })
+})
+
+// POST /sips — create a new SIP plan
+app.post('/sips', requireUser, async (req, res) => {
+  console.log('req reciueved')
+const userId = req.user.id
+const { investment_type, mf_type, amount,
+frequency, start_date, note } = req.body
+console.log(investment_type, mf_type,amount,frequency,start_date,note)
+// Validation
+if (!investment_type || !amount || !frequency || !start_date)
+return res.status(400).json({ error: 'Missing required fields' })
+if (investment_type === 'mf' && !mf_type)
+return res.status(400).json({
+error: 'mf_type is required for Mutual Fund SIPs'
+})
+
+const today = new Date().toISOString().split('T')[0]
+
+// Insert the SIP plan
+const { data: sip, error } = await supabaseAdmin
+.from('sip_plans')
+.insert({
+user_id: userId,
+investment_type,
+mf_type: investment_type === 'mf' ? mf_type : null,
+amount,
+frequency,
+start_date,
+next_execution_date: start_date,
+note: note ?? null,
+})
+.select()
+.single()
+
+if (error) return res.status(500).json({ error: error.message })
+
+let next_execution_date = start_date
+
+// If start_date is today or in the past, execute immediately
+if (start_date <= today) {
+await supabaseAdmin.from('investments').insert({
+user_id: userId,
+date: start_date,
+type: investment_type,
+mf_type: investment_type === 'mf' ? mf_type : null,
+amount,
+note: note ? `[SIP] ${note}`
+: `[SIP] Auto-logged ${frequency} SIP`,
+sip_id: sip.id,
+})
+
+// Advance to next cycle
+next_execution_date = advanceSipDate(
+start_date, frequency, start_date
+)
+await supabaseAdmin
+.from('sip_plans')
+.update({ next_execution_date })
+.eq('id', sip.id)
+}
+
+res.status(201).json({
+sip: { ...sip, next_execution_date }
+})
+})
+
+// PATCH /sips/:id — edit amount, note, or pause/resume/cancel
+app.patch('/sips/:id', requireUser, async (req, res) => {
+const userId = req.user.id
+const { id } = req.params
+const { amount, note, status } = req.body
+
+const updates = { updated_at: new Date().toISOString() }
+if (amount !== undefined) updates.amount = amount
+if (note !== undefined) updates.note = note
+
+if (status !== undefined) {
+updates.status = status
+
+// When resuming: recalculate next_execution_date
+// WITHOUT backfilling missed cycles
+if (status === 'active') {
+const { data: sip } = await supabaseAdmin
+.from('sip_plans')
+.select('*')
+.eq('id', id)
+.single()
+
+if (sip) {
+const today = new Date().toISOString().split('T')[0]
+let next = sip.start_date
+while (next <= today) {
+next = advanceSipDate(next, sip.frequency, sip.start_date)
+}
+updates.next_execution_date = next
+}
+}
+}
+
+const { data, error } = await supabaseAdmin
+.from('sip_plans')
+.update(updates)
+.eq('id', id)
+.eq('user_id', userId)
+.select()
+.single()
+
+if (error) return res.status(500).json({ error: error.message })
+res.json({ sip: data })
+})
+
+// DELETE /sips/:id — soft cancel (history is preserved)
+app.delete('/sips/:id', requireUser, async (req, res) => {
+const userId = req.user.id
+const { id } = req.params
+
+const { error } = await supabaseAdmin
+.from('sip_plans')
+.update({
+status: 'cancelled',
+updated_at: new Date().toISOString()
+})
+.eq('id', id)
+.eq('user_id', userId)
+
+if (error) return res.status(500).json({ error: error.message })
+res.json({ success: true })
+})
+
+// GET /sips/:id/history — investment entries auto-logged by this SIP
+app.get('/sips/:id/history', requireUser, async (req, res) => {
+const { id } = req.params
+
+const { data, error } = await supabaseAdmin
+.from('investments')
+.select('*')
+.eq('sip_id', id)
+.order('date', { ascending: false })
+.limit(10)
+
+if (error) return res.status(500).json({ error: error.message })
+res.json({ history: data ?? [] })
+})
+
+
 // ── Start server ──────────────────────────────────────────────────────────────
 const PORT = process.env.PORT ?? 5000;
 app.listen(PORT, () => {
   console.log(`✅ VALAM backend running on port ${PORT}`);
 });
+
+executeDueSIPs(supabaseAdmin).catch(console.error)
+setInterval(() => {
+executeDueSIPs(supabaseAdmin).catch(console.error)
+}, 24 * 60 * 60 * 1000)

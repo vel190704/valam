@@ -18,7 +18,7 @@ interface AssessmentPayload {
   valamScore: number
   valamLevel: number
   valamLevelName: string
-  potentialScore: number
+  //potentialScore: number
   potentialLevel: number
   potentialLevelName: string
   wealthVelocity: number
@@ -27,7 +27,7 @@ interface AssessmentPayload {
     investmentsScore: number
     incomeScore: number
     experienceScore: number
-    ageScore: number
+   // ageScore: number
   }
 }
 const {data:{session}} = await supabase.auth.getSession();
@@ -60,16 +60,16 @@ function getPendingAssessment(
       valamScore:         parsed.positionScore,
       valamLevel:         parsed.positionLevel,
       valamLevelName:     parsed.positionLevelName,
-      potentialScore:     parsed.potentialScore,
+      //potentialScore:     parsed.potentialScore,
       potentialLevel:     parsed.potentialLevel,
       potentialLevelName: parsed.potentialLevelName,
       wealthVelocity:     parsed.breakdown?.wealthVelocity ?? 0,
       breakdown: {
         savingsScore:     parsed.breakdown?.savingsScore        ?? 0,
-        investmentsScore: parsed.breakdown?.wealthVelocityScore ?? 0,
+        investmentsScore: parsed.breakdown?.investmentVelocityScore ?? 0,
         incomeScore:      parsed.breakdown?.incomeScore         ?? 0,
         experienceScore:  parsed.breakdown?.experienceScore     ?? 0,
-        ageScore:         parsed.breakdown?.ageScore            ?? 0,
+        //ageScore:         parsed.breakdown?.ageScore            ?? 0,
       },
     }
   } catch {

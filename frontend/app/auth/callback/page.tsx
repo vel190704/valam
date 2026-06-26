@@ -84,7 +84,7 @@ export default function AuthCallbackPage() {
         err
       )
       router.replace(
-        '/login'
+        '/onboarding/step1'
       )
     }
   } }
@@ -163,12 +163,12 @@ export default function AuthCallbackPage() {
         err
       )
       router.replace(
-        '/login'
+        '/onboarding/step1'
       )
     }
-  } 
+  }
 else{
-  router.replace('/')
+  router.replace('/onboarding/step1')
 }}
         } else {
           router.replace('/login?error=oauth_failed')

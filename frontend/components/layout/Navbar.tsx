@@ -21,6 +21,10 @@ export default function Navbar() {
     '/auth',
     '/allocation',
     '/learning',
+    '/milestones',
+    '/sip',
+    '/calculators',
+    '/knowledge-hub',
   ]
 
   const hiddenPage = appPages.some(
@@ -129,7 +133,7 @@ export default function Navbar() {
         {userEmail ? (
           <Link
             href="/profile"
-            aria-label="Go to dashboard"
+            aria-label="Go to profile"
             className="flex h-10 w-10 items-center justify-center rounded-full font-serif text-base font-bold text-white"
             style={{
               background: 'var(--gold)',

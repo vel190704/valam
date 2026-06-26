@@ -126,6 +126,9 @@ export default function AllocationPage() {
   const[dark,setDark] = useState(false);
   const [age, setAge] = useState(0);
   const [valamLevelName, setValamLevelName] = useState('')
+  const [insight, setInsight] = useState<string>('')
+  const [equityInsight, setEquityInsight] = useState<string>('')
+  const [insightLoading, setInsightLoading] = useState(false)
 
     useEffect(() => {
       async function darc(){
@@ -184,7 +187,32 @@ darc()
 
   init()
 }, [loadInvestments])
-  
+
+  useEffect(() => {
+    if (!investments.length || !valamLevel) return
+    async function fetchInsight() {
+      setInsightLoading(true)
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return
+        const BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000'
+        const res = await fetch(
+          `${BASE}/allocation-insights?risk=${risk}&level=${valamLevel}`,
+          { headers: { Authorization: `Bearer ${session.access_token}` } }
+        )
+        if (res.ok) {
+          const json = await res.json()
+          setInsight(json.insight || '')
+          setEquityInsight(json.equityInsight || '')
+        }
+      } catch (e) {
+        console.error('[allocation] insight fetch error:', e)
+      } finally {
+        setInsightLoading(false)
+      }
+    }
+    fetchInsight()
+  }, [investments, valamLevel, risk])
 
   // ── Compute actual allocation ─────────────────────────────────────────
   const portfolioByCategory = {
@@ -411,7 +439,7 @@ for (const inv of investments) {
         {/* Level badge */}
         <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 20 }}>
           Suggestions are tailored for{' '}
-          <span style={{ color: 'var(--gold)', fontWeight: 700 }}></span>
+          <span style={{ color: 'var(--gold)', fontWeight: 700 }}>Level {valamLevel}</span>
           {' '}investors · Portfolio total{' '}
           <span style={{ color: 'var(--text)', fontWeight: 600 }}>{fmt(totalAmt)}</span>
         </div>
@@ -559,6 +587,47 @@ for (const inv of investments) {
                 </div>
               ))}
               </div>
+
+              {(insight || insightLoading) && (
+                <div style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 12,
+                  padding: '16px 20px',
+                  marginTop: 16
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gold)', marginBottom: 8 }}>
+                    AI Insights
+                  </div>
+                  {insightLoading ? (
+                    <div style={{ color: 'var(--muted)', fontSize: 14 }}>
+                      Analysing your portfolio...
+                    </div>
+                  ) : (
+                    <div style={{ color: 'var(--text)', fontSize: 14, lineHeight: 1.6 }}>
+                      {insight}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {equityInsight && (
+                <div style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 12,
+                  padding: '16px 20px',
+                  marginTop: 12
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gold)', marginBottom: 8 }}>
+                    Equity Gap Analysis
+                  </div>
+                  <div style={{ color: 'var(--text)', fontSize: 14, lineHeight: 1.6 }}>
+                    {equityInsight}
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
               {/* Actual donut */}
               <div style={{ background: 'var(--surface)', borderRadius: 18,

@@ -13,6 +13,7 @@ type Props = {
     | 'Net Worth'
     | 'Goals'
     | 'Allocation'
+    | 'Calculators'
 }
 
 export default function DNavbar({
@@ -66,6 +67,7 @@ export default function DNavbar({
     'Net Worth',
     'Goals',
     'Allocation',
+    'Calculators',
   ] as const
 
   return (
@@ -259,6 +261,9 @@ export default function DNavbar({
 
               if (tab === 'Allocation')
                 router.push('/allocation')
+
+              if (tab === 'Calculators')
+                router.push('/calculators')
 
             }}
 

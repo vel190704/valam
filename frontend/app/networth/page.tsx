@@ -39,10 +39,11 @@ function fmt(v: number): string {
   return `₹${v.toFixed(0)}`
 }
 
-function NetWorthGauge({ netWorth, totalAssets, totalLiabilities }: {
+function NetWorthGauge({ netWorth, totalAssets, totalLiabilities, portfolioTotal = 0 }: {
   netWorth: number
   totalAssets: number
   totalLiabilities: number
+  portfolioTotal?: number
 }) {
   const grand = totalAssets + totalLiabilities || 1
   const circumference = 2 * Math.PI * 52
@@ -114,6 +115,11 @@ function NetWorthGauge({ netWorth, totalAssets, totalLiabilities }: {
                 ? `${Math.round(totalAssets / grand * 100)}% of total`
                 : 'None added yet'}
             </div>
+            {portfolioTotal > 0 && (
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                incl. {fmt(portfolioTotal)} portfolio
+              </div>
+            )}
           </div>
         </div>
 
@@ -172,6 +178,7 @@ export default function NetworthPage() {
   const [formNote,   setFormNote]   = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error,      setError]      = useState('')
+  const [portfolioTotal, setPortfolioTotal] = useState(0)
 
   const load = useCallback(async (tok: string) => {
     const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
@@ -181,6 +188,14 @@ export default function NetworthPage() {
     if (res.ok) {
       const json = await res.json() as { items: NetworthItem[] }
       setItems(json.items ?? [])
+    }
+    const invRes = await fetch(`${BASE}/investments`, {
+      headers: { Authorization: `Bearer ${tok}` }
+    })
+    if (invRes.ok) {
+      const invJson = await invRes.json() as { investments: { amount: number }[] }
+      const total = (invJson.investments ?? []).reduce((s, i) => s + Number(i.amount), 0)
+      setPortfolioTotal(total)
     }
     setLoading(false)
   }, [])
@@ -196,7 +211,7 @@ export default function NetworthPage() {
 
   const totalAssets      = items.filter(i => !LIABILITY_KEYS.has(i.category)).reduce((s, i) => s + i.amount, 0)
   const totalLiabilities = items.filter(i =>  LIABILITY_KEYS.has(i.category)).reduce((s, i) => s + i.amount, 0)
-  const netWorth         = totalAssets - totalLiabilities
+  const netWorth         = portfolioTotal + totalAssets - totalLiabilities
 
   async function addItem() {
     if (!formLabel.trim() || !formAmt) { setError('Label and amount required'); return }
@@ -284,8 +299,9 @@ export default function NetworthPage() {
           display: 'flex', alignItems: 'center', gap: 24, marginBottom: 16, flexWrap: 'wrap' }}>
           <NetWorthGauge
             netWorth={netWorth}
-            totalAssets={totalAssets}
+            totalAssets={portfolioTotal + totalAssets}
             totalLiabilities={totalLiabilities}
+            portfolioTotal={portfolioTotal}
           />
         </div>
 

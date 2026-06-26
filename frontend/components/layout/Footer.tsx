@@ -1,20 +1,17 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 
 export default function Footer() {
-  const [hidden, setHidden] = useState(false)
-
-  useEffect(() => {
-    async function foot(){
-    const appPages = ['/dashboard', '/portfolio', '/networth',
-      '/income', '/result', '/onboarding', '/auth', '/profile']
-    setHidden(appPages.some(p => window.location.pathname.startsWith(p)))
- foot()
- }}, [])
-
-  if (hidden) return null
+  const pathname = usePathname()
+  const appPages = [
+    '/dashboard', '/portfolio', '/networth', '/income',
+    '/result', '/onboarding', '/auth', '/profile',
+    '/learning', '/milestones', '/allocation', '/sip',
+    '/calculators', '/knowledge-hub'
+  ]
+  if (appPages.some(p => pathname.startsWith(p))) return null
 
  return (
   <footer

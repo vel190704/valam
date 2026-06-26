@@ -123,6 +123,7 @@ export default function DashboardPage() {
   const [monthlySavingsRate, setMonthlySavingsRate] = useState<number | null>(null)
   const [roadmap, setRoadmap] = useState<RoadmapResponse | null>(null)
   const [recentLearning, setRecentLearning] = useState<{ topicName: string; status: string }[]>([])
+  const [achievementQueue, setAchievementQueue] = useState<Array<{ name: string; category: string; threshold: number; description: string }>>([])
 
   useEffect(() => {
     document.body.classList.toggle('dark', dark)
@@ -190,7 +191,7 @@ export default function DashboardPage() {
         }
         if (milestonesRes.ok) {
           const mJson = await milestonesRes.json() as {
-            milestones: { name: string; unlocked: boolean; unlocked_at: string | null }[]
+            milestones: { name: string; category: string; threshold: number; description: string; unlocked: boolean; unlocked_at: string | null }[]
             unlockedCount: number
           }
           setMilestonesUnlocked(mJson.unlockedCount ?? 0)
@@ -200,6 +201,21 @@ export default function DashboardPage() {
             .slice(0, 3)
             .map(m => ({ name: m.name, unlocked_at: m.unlocked_at! }))
           setRecentMilestones(recent)
+          const seenIds = new Set<string>(JSON.parse(sessionStorage.getItem('seenMilestones') ?? '[]'))
+          const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+          const newlyUnlocked = (mJson.milestones ?? [])
+            .filter(m => m.unlocked && m.unlocked_at && !seenIds.has(m.name) && m.unlocked_at >= oneDayAgo)
+            .map(m => ({
+              name: m.name,
+              category: m.category ?? '',
+              threshold: m.threshold ?? 0,
+              description: m.description ?? '',
+            }))
+          if (newlyUnlocked.length > 0) {
+            const allSeen = [...Array.from(seenIds), ...newlyUnlocked.map(m => m.name)]
+            sessionStorage.setItem('seenMilestones', JSON.stringify(allSeen))
+            setAchievementQueue(newlyUnlocked)
+          }
         }
         if (roadmapRes.ok) {
           const rJson = await roadmapRes.json() as RoadmapResponse
@@ -207,7 +223,7 @@ export default function DashboardPage() {
         }
         if (learningRes.ok) {
           const lJson = await learningRes.json() as { recent: { topicName: string; status: string }[] }
-          setRecentLearning(lJson.recent ?? [])
+          setRecentLearning((lJson.recent ?? []).filter(t => t.topicName && t.topicName.trim().length > 0))
         }
       } catch (err) {
         console.error('Failed to load dashboard:', err)
@@ -339,9 +355,69 @@ export default function DashboardPage() {
     </main>
   )
 
+  function getAchievementDetail(category: string, threshold: number, description: string): string {
+    function fmtAmt(n: number): string {
+      if (n >= 10000000) return `₹${(n / 10000000).toFixed(1)}Cr`
+      if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`
+      if (n >= 1000) return `₹${(n / 1000).toFixed(0)}K`
+      return `₹${n}`
+    }
+    if (description && description.trim().length > 0) return description.trim()
+    const thresholdStr = fmtAmt(threshold)
+    const specifics: Record<string, string> = {
+      networth:   `You crossed ${thresholdStr} in total net worth. Your assets are compounding meaningfully.`,
+      investment: `Your investment portfolio crossed ${thresholdStr}. Consistency is building real wealth.`,
+      savings:    `You hit a ${threshold}% savings rate. That discipline is your biggest wealth lever.`,
+      income:     `Your income crossed ${thresholdStr} this financial year. Growth is accelerating.`,
+      learning:   `Your financial knowledge keeps growing. You completed a key learning milestone.`,
+      emergency:  `Your emergency fund crossed ${thresholdStr}. Your safety net is getting stronger.`,
+    }
+    return specifics[category] ?? `You reached a meaningful milestone on your wealth journey.`
+  }
+
   return (
     <main style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'Inter,sans-serif' }}>
       <style>{CSS}</style>
+
+      {/* ACHIEVEMENT POPUP */}
+      {achievementQueue.length > 0 && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            background: 'var(--surface)', border: '1px solid var(--gold)',
+            borderRadius: 20, padding: '28px 32px', maxWidth: 400, width: '90%',
+            textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+          }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>🏆</div>
+            <div style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700, letterSpacing: '.4px', textTransform: 'uppercase', marginBottom: 8 }}>
+              Milestone Unlocked
+            </div>
+            <div style={{ fontFamily: 'Playfair Display,serif', fontSize: 20, color: 'var(--text)', marginBottom: 12 }}>
+              {achievementQueue[0].name}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6, marginBottom: 20 }}>
+              {getAchievementDetail(
+                achievementQueue[0].category,
+                achievementQueue[0].threshold,
+                achievementQueue[0].description
+              )}
+            </div>
+            <button
+              onClick={() => setAchievementQueue(prev => prev.slice(1))}
+              style={{
+                background: 'var(--gold)', color: '#fff', border: 'none',
+                borderRadius: 12, padding: '10px 28px', fontSize: 14,
+                fontWeight: 600, cursor: 'pointer'
+              }}
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* TOP NAV */}
       <nav style={{

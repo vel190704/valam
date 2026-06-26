@@ -344,9 +344,15 @@ export default function IncomePage() {
     : null
   const uniqueSources = new Set(entries.map(e => e.source)).size
 
-  const stability      = uniqueSources >= 3 ? 'Strong' : uniqueSources === 2 ? 'Moderate' : 'Weak'
+  const last6Months = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(); d.setMonth(d.getMonth() - i)
+    return d.toISOString().slice(0, 7)
+  })
+  const activeMonths = last6Months.filter(m => entries.some(e => e.date.slice(0, 7) === m)).length
+  const stability = activeMonths >= 5 ? 'Strong' : activeMonths >= 3 ? 'Moderate' : 'Weak'
   const growth         = growthPct !== null ? growthPct > 5 ? 'Strong' : growthPct > 0 ? 'Moderate' : 'Weak' : 'Moderate'
-  const diversification = uniqueSources >= 3 ? 'Strong' : uniqueSources === 2 ? 'Moderate' : 'Weak'
+  const uniqueCategories = new Set(entries.map(e => e.source)).size
+  const diversification = uniqueCategories >= 3 ? 'Strong' : uniqueCategories === 2 ? 'Moderate' : 'Weak'
   const healthColor    = (s: string) =>
     s === 'Strong' ? 'var(--green)' : s === 'Moderate' ? 'var(--gold)' : 'var(--red)'
 
@@ -512,10 +518,10 @@ export default function IncomePage() {
             textTransform:'uppercase', fontWeight:500, marginBottom:14 }}>Income Health</div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
             {[
-              { label:'Income Stability',        status: stability      },
-              { label:'Income Growth',           status: growth         },
-              { label:'Income Diversification',  status: diversification },
-            ].map(({ label, status }) => (
+              { label:'Income Stability',       status: stability,       sub: 'Consistency over 6 months' },
+              { label:'Income Growth',          status: growth,          sub: 'Month-on-month change' },
+              { label:'Income Diversification', status: diversification, sub: 'Distinct income sources' },
+            ].map(({ label, status, sub }) => (
               <div key={label} style={{ background:'var(--surface2)', borderRadius:12,
                 padding:'14px 16px', border:'1px solid var(--border)',
                 borderLeft:`3px solid ${healthColor(status)}` }}>
@@ -523,6 +529,7 @@ export default function IncomePage() {
                   marginBottom:6 }}>{label}</div>
                 <div style={{ fontSize:16, fontWeight:700,
                   color:healthColor(status) }}>{status}</div>
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>{sub}</div>
               </div>
             ))}
           </div>

@@ -886,6 +886,56 @@ app.get("/roadmap", requireUser, async (req, res) => {
       };
     }
 
+    // ── Build liveContext for the new task engine ─────────────────────────────
+    // Total investments from the DB
+    const { data: allInv } = await supabaseAdmin
+      .from('investments')
+      .select('type, amount, mfType, date')
+      .eq('user_id', req.user.id)
+
+    const invList2 = allInv ?? []
+    const totalInvestments = invList2.reduce((s, i) => s + Number(i.amount), 0)
+
+    // Has a SIP-tagged investment in last 60 days?
+    const sixtyDaysAgo = new Date()
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
+    const cutoff = sixtyDaysAgo.toISOString().split('T')[0]
+    const hasRecentSIP = invList2.some(i =>
+      i.date >= cutoff && (i.note?.includes('[SIP]') || false)
+    )
+
+    // Asset allocation percentages
+    const EQUITY_TYPES2 = new Set(['mf', 'etf', 'stock', 'crypto'])
+    const DEBT_TYPES2   = new Set(['fd', 'bond'])
+    let eqAmt = 0, dtAmt = 0, goldAmt = 0
+    for (const inv of invList2) {
+      const amt = Number(inv.amount)
+      if (EQUITY_TYPES2.has(inv.type)) eqAmt += amt
+      else if (DEBT_TYPES2.has(inv.type)) dtAmt += amt
+      else goldAmt += amt
+    }
+    const invTotal2 = eqAmt + dtAmt + goldAmt || 1
+    const equityPct = Math.round(eqAmt    / invTotal2 * 100)
+    const debtPct2  = Math.round(dtAmt    / invTotal2 * 100)
+    const goldPct2  = Math.round(goldAmt  / invTotal2 * 100)
+
+    // Monthly income from live savings calculation
+    const monthlyIncome = totalIncomeFYR > 0
+      ? Math.round(totalIncomeFYR / 12)
+      : 0
+
+    const liveContext = {
+      totalInvestments,
+      monthlySavingsRate: liveSavingsRateR ?? null,
+      monthlyIncome,
+      hasRecentSIP,
+      netWorth:    roadmapNetWorth ?? 0,
+      equityPct,
+      goldPct:     goldPct2,
+      debtPct:     debtPct2,
+      experienceKey: profileRow.experience ?? 'beginner',
+    }
+
     // learningLevel: experienceScore / 2 → beginner=2→1, learning=4→2, intermediate=6→3, advanced=8→4
     const learningLevel = Math.max(1, Math.min(4, profile.breakdown.experienceScore / 2));
 
@@ -896,7 +946,7 @@ app.get("/roadmap", requireUser, async (req, res) => {
     //    Still call determineNextTask() (cheap deterministic math) to reconstruct
     //    the full task/progress object for the response.
     if (cached && cached.scoreSnapshot === profile.valamScore) {
-      const roadmapResult = determineNextTask(profile, learningLevel, freshFactorScores);
+      const roadmapResult = determineNextTask(profile, learningLevel, freshFactorScores, liveContext);
       return res.json({
         task:        roadmapResult,
         tasks:       roadmapResult.tasks,
@@ -906,10 +956,10 @@ app.get("/roadmap", requireUser, async (req, res) => {
     }
 
     // 4. Cache miss: score changed or first visit — call full pipeline
-    const roadmapResult = determineNextTask(profile, learningLevel, freshFactorScores);
+    const roadmapResult = determineNextTask(profile, learningLevel, freshFactorScores, liveContext);
 
     const firstName = (profile.name ?? "").split(" ")[0].trim() || "";
-    const { explanation, source } = await generateCoachingExplanation(groq, roadmapResult, firstName);
+    const { explanation, source } = await generateCoachingExplanation(groq, roadmapResult, firstName, liveContext);
 
     // Persist the new cache entry (await so it's ready for the immediate next request)
     try {
@@ -939,6 +989,155 @@ app.get("/roadmap", requireUser, async (req, res) => {
     });
   }
 });
+
+// ── Allocation Insights ───────────────────────────────────────────────────────
+app.get('/allocation-insights', requireUser, async (req, res) => {
+  try {
+    const userId = req.user.id
+    // Use risk from query param (live frontend state) or fall back to stored profile
+    const riskParam = req.query.risk
+    const levelParam = parseInt(req.query.level) || null
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles').select('*').eq('user_id', userId).single()
+    const { data: investments } = await supabaseAdmin
+      .from('investments').select('*').eq('user_id', userId)
+
+    if (!profile) return res.status(404).json({ error: 'Profile not found' })
+
+    const level = levelParam ?? profile.valam_level ?? 1
+    const risk  = riskParam ?? profile.risk_profile ?? 'medium'
+    const riskLabel = risk === 'low' ? 'conservative' : risk === 'high' ? 'aggressive' : 'balanced'
+    const age = Number(profile.age) || 30
+
+    // Compute the correct ideal allocation based on age + risk (mirrors frontend lib/allocation.ts)
+    function getIdealAllocation(age, risk) {
+      if (risk === 'low') {
+        if (age < 40) return { equity: 70, debt: 20, gold: 10 }
+        if (age < 60) return { equity: 60, debt: 30, gold: 10 }
+        return { equity: 40, debt: 50, gold: 10 }
+      }
+      if (risk === 'medium') {
+        if (age < 40) return { equity: 80, debt: 10, gold: 10 }
+        if (age < 60) return { equity: 70, debt: 20, gold: 10 }
+        return { equity: 50, debt: 40, gold: 10 }
+      }
+      // high risk
+      if (age < 40) return { equity: 90, debt: 0, gold: 10 }
+      if (age < 60) return { equity: 80, debt: 10, gold: 10 }
+      return { equity: 60, debt: 30, gold: 10 }
+    }
+    const ideal = getIdealAllocation(age, risk)
+
+    // Build investment summary
+    const invList = (investments || [])
+
+    // Categorise investments (mirrors frontend lib/allocation.ts TYPE_TO_CATEGORY)
+    const EQUITY_TYPES = new Set(['mf', 'etf', 'stock', 'crypto'])
+    const DEBT_TYPES   = new Set(['fd', 'bond'])
+    // commodity/realestate → Gold/Other
+    let actualEquity = 0, actualDebt = 0, actualGold = 0
+    for (const inv of invList) {
+      const amt = Number(inv.amount)
+      if (EQUITY_TYPES.has(inv.type)) actualEquity += amt
+      else if (DEBT_TYPES.has(inv.type)) actualDebt += amt
+      else actualGold += amt
+    }
+    const total = actualEquity + actualDebt + actualGold || 1
+    const equityPct = Math.round(actualEquity / total * 100)
+    const debtPct   = Math.round(actualDebt   / total * 100)
+    const goldPct   = Math.round(actualGold   / total * 100)
+
+    const prompt = `VALAM user profile: Age ${age}, Level ${level}, ${riskLabel} risk investor.
+
+Their current portfolio allocation:
+- Equity (MF/ETF/Stock): ${equityPct}% (₹${Math.round(actualEquity/1000)}K)
+- Debt (FD/Bond): ${debtPct}% (₹${Math.round(actualDebt/1000)}K)
+- Gold/Other: ${goldPct}% (₹${Math.round(actualGold/1000)}K)
+
+Ideal allocation for their age (${age}) and ${riskLabel} risk profile:
+- Equity: ${ideal.equity}%
+- Debt: ${ideal.debt}%
+- Gold: ${ideal.gold}%
+
+In exactly 2 sentences: identify which category they are most over or under-weight in,
+state the gap as a percentage (actual vs ideal), and name one specific action to address it.
+Be precise with numbers. Do not use generic language like "consider rebalancing".`
+
+    // Include all MF investments; treat null mfType as 'Unknown'
+    const allMfItems = invList.filter(i => i.type === 'mf')
+    const hasMF = allMfItems.length > 0
+
+    const MF_TYPE_MAP = {
+      'nifty50': 'Index', 'largecap': 'Index',
+      'flexicap': 'Flexi', 'midcap': 'Mid', 'smallcap': 'Small',
+      'debt': 'Debt MF', 'international': 'International',
+      'commodity': 'Commodity MF',
+    }
+
+    const mfBySubtype = {}
+    let unknownMF = 0
+    for (const inv of allMfItems) {
+      const subtype = MF_TYPE_MAP[inv.mfType] ?? MF_TYPE_MAP[inv.mf_type]
+      if (subtype) {
+        mfBySubtype[subtype] = (mfBySubtype[subtype] ?? 0) + Number(inv.amount)
+      } else {
+        unknownMF += Number(inv.amount)
+      }
+    }
+    const totalMF = allMfItems.reduce((s, i) => s + Number(i.amount), 0)
+
+    // Build equity ideal for the prompt
+    function getIdealEquity(age, risk) {
+      if (risk === 'low') {
+        if (age < 40) return { Index: 60, Flexi: 20, Mid: 15, Small: 5 }
+        return { Index: 70, Flexi: 15, Mid: 10, Small: 5 }
+      }
+      if (risk === 'medium') {
+        if (age < 40) return { Index: 40, Flexi: 30, Mid: 20, Small: 10 }
+        return { Index: 50, Flexi: 25, Mid: 15, Small: 10 }
+      }
+      // high
+      if (age < 40) return { Index: 25, Flexi: 30, Mid: 25, Small: 20 }
+      return { Index: 35, Flexi: 30, Mid: 20, Small: 15 }
+    }
+    const idealEquity = getIdealEquity(age, risk)
+
+    const equityPrompt = hasMF ? `User's mutual fund portfolio (total ₹${Math.round(totalMF/1000)}K):
+${Object.entries(mfBySubtype).map(([t, amt]) => `- ${t}: ${Math.round(Number(amt)/totalMF*100)}% (₹${Math.round(Number(amt)/1000)}K)`).join('\n')}
+${unknownMF > 0 ? `- Unclassified MF: ${Math.round(unknownMF/totalMF*100)}% (₹${Math.round(unknownMF/1000)}K)` : ''}
+
+Ideal equity split for age ${age}, ${riskLabel} risk:
+- Index/Large: ${idealEquity.Index}%
+- Flexi: ${idealEquity.Flexi}%
+- Mid: ${idealEquity.Mid}%
+- Small: ${idealEquity.Small}%
+
+In exactly 1 sentence: name the biggest imbalance in their MF allocation and what to do about it.
+Be specific with percentages.` : null
+
+    // Call Groq for main insight
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 120,
+      temperature: 0.4
+    })
+    const insight = completion.choices[0]?.message?.content?.trim() || ''
+
+    const equityInsight = equityPrompt ? (await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: equityPrompt }],
+      max_tokens: 80,
+      temperature: 0.4
+    })).choices[0]?.message?.content?.trim() ?? '' : ''
+
+    res.json({ insight, equityInsight })
+  } catch (err) {
+    console.error('[allocation-insights] error:', err.message)
+    res.status(500).json({ error: 'Failed to generate insight' })
+  }
+})
 
 // ── Learning Hub ─────────────────────────────────────────────────────────────
 const LEVEL_NAMES = ['Seed', 'Explorer', 'Builder', 'Accelerator', 'Achiever', 'Wealth Creator', 'Wealth Architect', 'Legend'];
@@ -1100,7 +1299,7 @@ app.post("/learning/progress", requireUser, async (req, res) => {
 app.post('/contact', async (req, res) => {
   try {
     if (!resend) {
-      return res.status(503).json({ error: 'Email not configured' })
+      return res.status(503).json({ error: 'Email not configured', fallback: 'valamhq@gmail.com' })
     }
     const { name, email, message } = req.body
     await resend.emails.send({
@@ -1319,5 +1518,15 @@ res.json({ history: data ?? [] })
 const PORT = process.env.PORT ?? 5000;
 app.listen(PORT, () => {
   console.log(`✅ VALAM backend running on port ${PORT}`);
+  // Run SIP cron immediately on startup to catch any missed cycles
+  executeDueSIPs(supabaseAdmin).catch(err =>
+    console.error('[sipCron] Startup execution failed:', err.message)
+  );
+  // Then run every 24 hours
+  setInterval(() => {
+    executeDueSIPs(supabaseAdmin).catch(err =>
+      console.error('[sipCron] Scheduled execution failed:', err.message)
+    );
+  }, 24 * 60 * 60 * 1000);
 });
 

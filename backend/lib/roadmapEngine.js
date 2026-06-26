@@ -1,11 +1,18 @@
 /**
- * Deterministic roadmap engine — rule-based only, no LLM calls.
- * Determines the top-3 highest-impact tasks for a VALAM user.
+ * VALAM Roadmap Engine v2 — follows the 7-priority Task Generation Framework
+ * from the VALAM product document exactly.
  *
- * "The Most Important Rule" (Dinesh's rulebook):
- *   If financialHealthScore <= 3, Task 1 MUST be a Financial Health
- *   task (emergency fund / debt / insurance) regardless of other scores.
- *   Fix the foundation before building wealth.
+ * Priority order (highest unmet always becomes Task 1):
+ *   P1  Emergency Fund
+ *   P2  Active Investing (first investment + SIP)
+ *   P3  Savings Rate (threshold-specific)
+ *   P4  Financial Knowledge (module-specific by experience level)
+ *   P5  Portfolio Diversification (only if totalInvestments >= 50000)
+ *   P6  Net Worth Milestones
+ *   P7  Level Progression
+ *
+ * The engine is purely deterministic — no LLM calls here.
+ * aiCoach.js narrates the task this engine selects.
  */
 
 const LEVEL_NAMES = {
@@ -21,207 +28,258 @@ const NEXT_LEVEL_FLOORS = {
   1: 2.0, 2: 3.0, 3: 4.0, 4: 5.0, 5: 6.0, 6: 7.0, 7: 7.5, 8: null,
 }
 
-/**
- * Standard positionScore factor tasks.
- * `detail` = deterministic short explanation for tasks ranked 2 and 3.
- */
-const TASK_MAP = {
-  netWorth: {
-    taskType: 'build_net_worth',
-    title:    'Grow your net worth',
-    detail:   'Net worth is the clearest measure of wealth progress. Track your assets, pay down liabilities, and consistently widen the gap between them.',
-  },
-  wealthVelocity: {
-    taskType: 'increase_investment_consistency',
-    title:    'Increase monthly SIP contribution',
-    detail:   'Consistent monthly investments grow your net worth faster each year — small increases now compound significantly over time.',
-  },
-  savings: {
-    taskType: 'increase_savings_rate',
-    title:    'Build your savings rate',
-    detail:   'A stronger savings rate builds your investable capital base — the foundation every other financial goal depends on.',
-  },
-  income: {
-    taskType: 'income_growth_awareness',
-    title:    'Explore income growth',
-    detail:   'Growing your income expands what\'s possible across savings, investments, and financial security simultaneously.',
-  },
-  experience: {
-    taskType: 'complete_learning_module',
-    title:    'Complete a learning module',
-    detail:   'Every module you finish directly improves your Knowledge Score and builds the judgment needed for every financial decision ahead.',
-  },
+// ── Net worth milestone thresholds ────────────────────────────────────────────
+const NW_MILESTONES = [50000, 100000, 500000, 1000000, 2500000, 5000000, 10000000]
+
+function fmtINR(n) {
+  if (n >= 10000000) return `₹${(n / 10000000).toFixed(0)}Cr`
+  if (n >= 100000)   return `₹${(n / 100000).toFixed(0)}L`
+  if (n >= 1000)     return `₹${(n / 1000).toFixed(0)}K`
+  return `₹${n}`
 }
 
-/**
- * Financial Health tasks — used when fhScore <= 3 (FH override).
- * Selected based on which sub-factor is the most urgent gap.
- */
-const FH_TASKS = {
-  emergency_fund: {
+// ── Task builders ─────────────────────────────────────────────────────────────
+
+function taskEmergencyFund(monthlyIncome) {
+  const target = monthlyIncome > 0 ? fmtINR(monthlyIncome * 3) : '3 months of expenses'
+  return {
     taskType: 'build_emergency_fund',
     title:    'Build your emergency fund first',
-    detail:   'Before investing more, set aside 3–6 months of expenses in a liquid savings account or FD. This is your financial safety net.',
-  },
-  high_interest_debt: {
-    taskType: 'clear_high_interest_debt',
-    title:    'Clear high-interest debt immediately',
-    detail:   'Credit card and personal loan interest (18–36% p.a.) destroys wealth faster than any investment can build it. Pay these off before increasing investments.',
-  },
-  health_insurance: {
-    taskType: 'get_health_insurance',
-    title:    'Get health insurance coverage',
-    detail:   'A single medical emergency without insurance can wipe out years of savings. A basic ₹5–10L health cover costs ₹5,000–15,000/year — the highest-ROI financial move you can make.',
-  },
-  generic_fh: {
-    taskType: 'improve_financial_foundations',
-    title:    'Strengthen your financial foundations',
-    detail:   'Build an emergency fund, remove high-interest debt, and secure health insurance before scaling investments. A strong base makes everything else work better.',
-  },
+    detail:   `Before investing more, save ${target} in a liquid savings account or short-term FD. This safety net protects every rupee you invest.`,
+    allowAllocationDiscussion: false,
+  }
 }
 
-/**
- * Picks the most urgent FH task given the raw FH input values.
- * Priority order: no EF > significant debt > some debt > no insurance > generic.
- */
-function selectFhTask(emergencyFund, highInterestDebt, healthInsurance) {
-  if (emergencyFund === 'none')               return FH_TASKS.emergency_fund
-  if (highInterestDebt === 'significant')     return FH_TASKS.high_interest_debt
-  if (highInterestDebt === 'some')            return FH_TASKS.high_interest_debt
-  if (healthInsurance === 'no')               return FH_TASKS.health_insurance
-  return FH_TASKS.generic_fh
+function taskFirstInvestment() {
+  return {
+    taskType: 'start_first_sip',
+    title:    'Make your first investment',
+    detail:   'You have not made any investments yet. Starting a ₹500/month SIP in an index fund is the single highest-impact action you can take right now.',
+    allowAllocationDiscussion: false,
+  }
 }
 
+function taskStartSIP() {
+  return {
+    taskType: 'start_monthly_sip',
+    title:    'Start a monthly SIP',
+    detail:   'No SIP is active in the last 60 days. A recurring monthly investment — even a small one — builds wealth velocity that a lump sum cannot replicate.',
+    allowAllocationDiscussion: false,
+  }
+}
+
+function taskSavingsRate(currentRate) {
+  const r = Math.round(currentRate ?? 0)
+  let target, detail
+  if (r < 10) {
+    target = 10
+    detail = `Your savings rate is currently ${r}%. Reaching 10% creates the minimum investment runway needed to build wealth at any income level.`
+  } else if (r < 20) {
+    target = 20
+    detail = `Your savings rate is ${r}%. Pushing to 20% doubles your investable surplus and significantly accelerates your VALAM score.`
+  } else if (r < 30) {
+    target = 30
+    detail = `At ${r}% savings rate you are doing well. Reaching 30% puts you in the top tier of wealth builders at your income level.`
+  } else {
+    target = 40
+    detail = `Exceptional savings discipline at ${r}%. Reaching 40% will substantially compress the time to your next VALAM level.`
+  }
+  return {
+    taskType: 'increase_savings_rate',
+    title:    `Increase savings rate to ${target}%`,
+    detail,
+    allowAllocationDiscussion: false,
+  }
+}
+
+function taskKnowledge(experienceKey) {
+  const map = {
+    beginner:     { module: 'Index Fund Module',       detail: 'Understanding index funds is the essential first step — they are the safest, lowest-cost way to begin building your investment portfolio.' },
+    learning:     { module: 'Flexi Cap Module',        detail: 'Flexi cap funds let you benefit from growth across market caps without manually rebalancing. Completing this module upgrades your allocation awareness.' },
+    intermediate: { module: 'Debt Fund Module',        detail: 'Debt funds are your stability layer. Learning how to use them correctly is what separates a balanced portfolio from a purely equity-heavy one.' },
+    advanced:     { module: 'Asset Allocation Module', detail: 'At your knowledge level, refining your overall allocation strategy is the highest-leverage learning task remaining.' },
+  }
+  const entry = map[experienceKey] ?? map.beginner
+  return {
+    taskType: 'complete_learning_module',
+    title:    `Complete ${entry.module}`,
+    detail:   entry.detail,
+    allowAllocationDiscussion: false,
+  }
+}
+
+function taskDiversification(equityPct, goldPct, debtPct) {
+  if (equityPct > 90) {
+    return {
+      taskType: 'add_non_equity_diversification',
+      title:    'Add non-equity diversification',
+      detail:   `Your portfolio is ${equityPct}% equity — well above the recommended level. Direct the next investment towards debt or gold to reduce concentration risk.`,
+      allowAllocationDiscussion: true,
+    }
+  }
+  if (goldPct === 0) {
+    return {
+      taskType: 'build_gold_allocation',
+      title:    'Build initial gold allocation',
+      detail:   'You have zero gold exposure. A 10% gold allocation improves portfolio stability during equity market downturns.',
+      allowAllocationDiscussion: true,
+    }
+  }
+  if (debtPct === 0) {
+    return {
+      taskType: 'build_debt_allocation',
+      title:    'Build initial debt allocation',
+      detail:   'You have no debt allocation. Adding even 10% to FD or debt funds provides a stability buffer for your equity portfolio.',
+      allowAllocationDiscussion: true,
+    }
+  }
+  return {
+    taskType: 'reduce_portfolio_concentration',
+    title:    'Reduce portfolio concentration',
+    detail:   'Your largest asset class holds more than 80% of your portfolio. Rebalancing towards a more diversified mix reduces your risk exposure significantly.',
+    allowAllocationDiscussion: true,
+  }
+}
+
+function taskNetWorth(currentNW) {
+  const nw = currentNW ?? 0
+  const next = NW_MILESTONES.find(m => m > nw) ?? NW_MILESTONES[NW_MILESTONES.length - 1]
+  return {
+    taskType: 'grow_net_worth',
+    title:    `Reach ${fmtINR(next)} Net Worth`,
+    detail:   `Your current net worth is ${fmtINR(nw)}. Reaching ${fmtINR(next)} is your next concrete milestone — track it by keeping assets and liabilities up to date.`,
+    allowAllocationDiscussion: false,
+  }
+}
+
+function taskLevelProgression(currentLevel, currentLevelName, nextLevelName, valamScore) {
+  const nextFloor = NEXT_LEVEL_FLOORS[currentLevel]
+  const gap = nextFloor ? Math.max(0, nextFloor - valamScore).toFixed(2) : '0'
+  return {
+    taskType: 'reach_next_level',
+    title:    `Reach ${nextLevelName ?? 'Legend'} level`,
+    detail:   `You are ${gap} points away from ${nextLevelName ?? 'Legend'}. Keep improving your savings rate and investments to close the gap.`,
+    allowAllocationDiscussion: false,
+  }
+}
+
+// ── Main export ────────────────────────────────────────────────────────────────
+
 /**
- * Determines the top 3 highest-impact tasks and level-progress metrics.
+ * Determines the top 3 highest-priority tasks for this user.
  *
- * @param {object} profile        - The `profile` field from GET /profile.
- * @param {number} learningLevel  - 1–4 (derived as experienceScore / 2).
- * @param {object|null} factorScores - Optional override for factor values.
- *   Shape: { nw, wv, sav, inc, exp, fh?,
- *            emergencyFund?, highInterestDebt?, healthInsurance? }
+ * @param {object} profile        - profile from GET /profile (valamLevel, valamScore, breakdown, etc.)
+ * @param {number} learningLevel  - 1–4 (experienceScore / 2)
+ * @param {object|null} factorScores - live factor overrides from server.js
+ * @param {object} [liveContext]  - live data: { totalInvestments, monthlySavingsRate,
+ *                                   monthlyIncome, hasRecentSIP, netWorth,
+ *                                   equityPct, goldPct, debtPct, experienceKey }
  */
-export function determineNextTask(profile, learningLevel, factorScores = null) {
-  const currentLevel = profile?.valamLevel ?? 1
-  const valamScore   = profile?.valamScore  ?? 0
+export function determineNextTask(profile, learningLevel, factorScores = null, liveContext = {}) {
+  const currentLevel     = profile?.valamLevel ?? 1
+  const valamScore       = profile?.valamScore  ?? 0
+  const currentLevelName = LEVEL_NAMES[currentLevel] ?? ''
+  const nextLevelName    = currentLevel < 8 ? (LEVEL_NAMES[currentLevel + 1] ?? null) : null
 
   // ── Progress to next level ────────────────────────────────────────────────
   let progressToNextLevel
-  let nextLevelName
-
   if (currentLevel === 8) {
     progressToNextLevel = 100
-    nextLevelName       = null
   } else {
     const floor     = LEVEL_FLOORS[currentLevel]      ?? 0
     const nextFloor = NEXT_LEVEL_FLOORS[currentLevel] ?? floor + 1
     const raw       = ((valamScore - floor) / (nextFloor - floor)) * 100
     progressToNextLevel = Math.round(Math.min(100, Math.max(0, raw)))
-    nextLevelName       = LEVEL_NAMES[currentLevel + 1] ?? null
   }
 
-  const currentLevelName = LEVEL_NAMES[currentLevel] ?? ''
+  // ── Extract FH data ───────────────────────────────────────────────────────
+  const emergencyFund    = factorScores?.emergencyFund    ?? null
+  const highInterestDebt = factorScores?.highInterestDebt ?? null
+  const healthInsurance  = factorScores?.healthInsurance  ?? null
+  const fh               = factorScores?.fh               ?? (profile?.breakdown?.financialHealthScore ?? 4)
 
-  // ── Extract factor scores ─────────────────────────────────────────────────
-  let nw, wv, sav, inc, exp, fh
-  let emergencyFund, highInterestDebt, healthInsurance
+  // ── Live context ──────────────────────────────────────────────────────────
+  const totalInvestments   = liveContext.totalInvestments  ?? 0
+  const monthlySavingsRate = liveContext.monthlySavingsRate ?? null
+  const monthlyIncome      = liveContext.monthlyIncome     ?? 0
+  const hasRecentSIP       = liveContext.hasRecentSIP      ?? false
+  const netWorth           = liveContext.netWorth          ?? 0
+  const equityPct          = liveContext.equityPct         ?? 100
+  const goldPct            = liveContext.goldPct           ?? 0
+  const debtPct            = liveContext.debtPct           ?? 0
+  const experienceKey      = liveContext.experienceKey     ?? (profile?.experience ?? 'beginner')
 
-  if (factorScores) {
-    nw  = factorScores.nw  ?? 2  // neutral: 0 networth → score 2
-    wv  = factorScores.wv  ?? 0
-    sav = factorScores.sav ?? 0
-    inc = factorScores.inc ?? 0
-    exp = factorScores.exp ?? 0
-    fh  = factorScores.fh  ?? 4  // neutral default
-    emergencyFund    = factorScores.emergencyFund    ?? null
-    highInterestDebt = factorScores.highInterestDebt ?? null
-    healthInsurance  = factorScores.healthInsurance  ?? null
-  } else {
-    const bd = profile?.breakdown ?? {}
-    nw  = bd.netWorthScore      ?? 2
-    wv  = bd.investmentsScore   ?? 0  // legacy column name
-    sav = bd.savingsScore       ?? 0
-    inc = bd.incomeScore        ?? 0
-    exp = bd.experienceScore    ?? 0
-    fh  = bd.financialHealthScore ?? 4
-    emergencyFund    = null
-    highInterestDebt = null
-    healthInsurance  = null
+  // ── Build ordered task list by priority ───────────────────────────────────
+  const candidates = []
+
+  // P1: Emergency fund
+  if (emergencyFund === 'none' || fh <= 3) {
+    candidates.push({ priority: 1, factor: 'financialHealth', ...taskEmergencyFund(monthlyIncome) })
   }
 
-  // ── "THE MOST IMPORTANT RULE" — FH override ───────────────────────────────
-  // When fhScore is low (<=3), fix financial foundations before any wealth task.
-  const fhTask = fh <= 3 ? selectFhTask(emergencyFund, highInterestDebt, healthInsurance) : null
+  // P2: Active investing
+  if (totalInvestments === 0) {
+    candidates.push({ priority: 2, factor: 'wealthVelocity', ...taskFirstInvestment() })
+  } else if (!hasRecentSIP) {
+    candidates.push({ priority: 2, factor: 'wealthVelocity', ...taskStartSIP() })
+  }
 
-  // ── Defensive: brand-new or missing profile → safe default ───────────────
-  if (nw === 2 && wv === 0 && sav === 0 && inc === 0 && exp === 0) {
-    const primaryTask = fhTask ?? { ...TASK_MAP.savings, allowAllocationDiscussion: false }
-    return {
-      weakestFactor:    fhTask ? 'financialHealth' : 'savings',
-      weightedGap:      0,
-      task:             primaryTask,
-      tasks: [
-        { rank: 1, factor: fhTask ? 'financialHealth' : 'savings',
-          ...(fhTask ?? TASK_MAP.savings), allowAllocationDiscussion: false },
-        { rank: 2, factor: 'wealthVelocity', ...TASK_MAP.wealthVelocity, allowAllocationDiscussion: false },
-        { rank: 3, factor: 'experience',     ...TASK_MAP.experience,     allowAllocationDiscussion: false },
-      ],
-      currentLevel,
-      currentLevelName,
-      nextLevelName,
-      progressToNextLevel,
+  // P3: Savings rate
+  if (monthlySavingsRate !== null && monthlySavingsRate < 40) {
+    candidates.push({ priority: 3, factor: 'savings', ...taskSavingsRate(monthlySavingsRate) })
+  }
+
+  // P4: Knowledge
+  candidates.push({ priority: 4, factor: 'experience', ...taskKnowledge(experienceKey) })
+
+  // P5: Diversification (only if portfolio >= ₹50K)
+  if (totalInvestments >= 50000) {
+    const needsDiversification =
+      equityPct > 90 || goldPct === 0 || debtPct === 0 ||
+      Math.max(equityPct, goldPct, debtPct) > 80
+    if (needsDiversification) {
+      candidates.push({ priority: 5, factor: 'netWorth', ...taskDiversification(equityPct, goldPct, debtPct) })
     }
   }
 
-  // ── Weighted-gap calculation (PDF weights) ────────────────────────────────
-  const factors = [
-    { name: 'netWorth',      weight: 0.30, value: nw  },
-    { name: 'wealthVelocity', weight: 0.30, value: wv  },
-    { name: 'savings',        weight: 0.20, value: sav },
-    { name: 'income',         weight: 0.10, value: inc },
-    { name: 'experience',     weight: 0.10, value: exp },
-  ].map(f => ({ ...f, gap: f.weight * (8 - f.value) }))
-   .sort((a, b) => b.gap - a.gap)
+  // P6: Net worth milestone
+  candidates.push({ priority: 6, factor: 'netWorth', ...taskNetWorth(netWorth) })
 
-  const weakest = factors[0]
-  const factor  = weakest.name
-
-  function getAllocationFlag(factorName) {
-    return factorName === 'wealthVelocity' && learningLevel >= 3
+  // P7: Level progression (only if not at max)
+  if (currentLevel < 8) {
+    candidates.push({ priority: 7, factor: 'experience', ...taskLevelProgression(currentLevel, currentLevelName, nextLevelName, valamScore) })
   }
 
-  // ── Build top-3 task array (with FH override for Task 1) ─────────────────
-  const top3Standard = factors.slice(0, 3).map((f, i) => ({
-    rank:                    i + 1,
-    factor:                  f.name,
-    ...TASK_MAP[f.name],
-    allowAllocationDiscussion: getAllocationFlag(f.name),
-  }))
+  // ── Select top 3 by priority ──────────────────────────────────────────────
+  candidates.sort((a, b) => a.priority - b.priority)
 
-  if (fhTask) {
-    // Task 1 overridden by FH; tasks 2 and 3 remain standard positions 1 and 2
-    const tasks = [
-      { rank: 1, factor: 'financialHealth', ...fhTask, allowAllocationDiscussion: false },
-      { ...top3Standard[0], rank: 2 },
-      { ...top3Standard[1], rank: 3 },
-    ]
-    return {
-      weakestFactor:    'financialHealth',
-      weightedGap:      0.30 * (8 - fh),
-      task:             tasks[0],
-      tasks,
-      currentLevel,
-      currentLevelName,
-      nextLevelName,
-      progressToNextLevel,
-    }
+  // Remove duplicates by taskType
+  const seen = new Set()
+  const unique = candidates.filter(t => {
+    if (seen.has(t.taskType)) return false
+    seen.add(t.taskType)
+    return true
+  })
+
+  const top3 = unique.slice(0, 3).map((t, i) => ({ ...t, rank: i + 1 }))
+
+  // Ensure we always have 3 tasks (pad with level progression if needed)
+  while (top3.length < 3) {
+    top3.push({
+      rank: top3.length + 1,
+      priority: 7,
+      factor: 'experience',
+      ...taskLevelProgression(currentLevel, currentLevelName, nextLevelName, valamScore),
+    })
   }
+
+  const primaryTask = top3[0]
 
   return {
-    weakestFactor:    factor,
-    weightedGap:      weakest.gap,
-    task:             top3Standard[0],
-    tasks:            top3Standard,
+    weakestFactor:      primaryTask.factor,
+    weightedGap:        0,
+    task:               primaryTask,
+    tasks:              top3,
     currentLevel,
     currentLevelName,
     nextLevelName,

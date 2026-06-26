@@ -6,6 +6,16 @@
  * cycle is logged individually with its own date.
  */
 
+const SIP_TO_INVESTMENT_MF = {
+  index: "nifty50",
+  flexicap: "flexicap",
+  largecap: "largecap",
+  midcap: "midcap",
+  smallcap: "smallcap",
+  elss: "flexicap",
+  hybrid: "debt",
+};
+
 export function advanceSipDate(current, frequency, startDate) {
   if (frequency === 'weekly') {
     return new Date(current.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -48,7 +58,6 @@ export async function executeDueSIPs(supabaseAdmin) {
       execDates.push(execDate.toISOString().split('T')[0]);
       execDate = advanceSipDate(execDate, sip.frequency, sip.start_date);
     }
-
     // Log one investment entry per missed cycle
     for (const date of execDates) {
       const { error: insertErr } = await supabaseAdmin
@@ -60,6 +69,7 @@ export async function executeDueSIPs(supabaseAdmin) {
           amount:  sip.amount,
           note:    sip.note ? `[SIP] ${sip.note}` : `[SIP] Auto-logged ${sip.frequency} SIP`,
           sip_id:  sip.id,
+          mfType: sip.mf_type,
         });
 
       if (insertErr) {

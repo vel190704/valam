@@ -7,7 +7,7 @@ import DNavbar from '@/components/layout/dnavbar'
 // ── Types ──────────────────────────────────────────────────────────────────
 type InvestmentType = 'mf' | 'stock' | 'fd' | 'crypto' | 'bond' | 'etf' | 'realestate'
 type MfType = 'index' | 'flexicap' | 'midcap' | 'largecap' | 'smallcap' | 'elss' | 'hybrid'
-type MutualFundType = 'largecap' | 'midcap' | 'smallcap' | 'nifty50' | 'flexicap' | 'international' | 'debt' | 'commodity'
+type MutualFundType = 'largecap' | 'midcap' | 'smallcap' | 'nifty50' | 'flexicap' | 'international' | 'debt' | 'commodity'|'elss'|'hybrid'|'index'
 type SipFrequency = 'monthly' | 'weekly'
 type SipStatus = 'active' | 'paused' | 'cancelled'
 
@@ -61,6 +61,16 @@ const MF_TYPE_META: Record<MfType, string> = {
   elss:     'ELSS (Tax Saver)',
   hybrid:   'Hybrid Fund',
 }
+const MF_FORM_TYPES: MutualFundType[] = [
+  'largecap',
+  'midcap',
+  'smallcap',
+  'nifty50',
+  'flexicap',
+  'international',
+  'debt',
+  'commodity',
+]
 
 const MF_META: Record<MutualFundType, { label: string; emoji: string }> = {
   largecap:      { label: 'Large Cap',      emoji: '🏢' },
@@ -71,6 +81,9 @@ const MF_META: Record<MutualFundType, { label: string; emoji: string }> = {
   international: { label: 'International',  emoji: '🌎' },
   debt:          { label: 'Debt Fund',      emoji: '🛡️' },
   commodity:     { label: 'Commodity',      emoji: '🥇' },
+  elss:     { label: 'elss',      emoji: '🥇' },
+  hybrid:     { label: 'hybrid',      emoji: '🥇' },
+  index:     { label: 'index',      emoji: '🥇' },
 }
 
 const MF_TYPES = Object.keys(MF_META) as MutualFundType[]
@@ -84,6 +97,9 @@ const MF_COLORS: Record<MutualFundType, string> = {
   international: '#16A085',
   debt:          '#27AE60',
   commodity:     '#E07B54',
+  elss: '#E07B54',
+  hybrid: '#E07B54',
+  index: '#E07B54'
 }
 
 const CSS = `
@@ -730,9 +746,11 @@ setLoading(false)
                     border: '1px solid var(--border-md)', borderRadius: 10,
                     padding: '10px 12px', fontSize: 12, color: 'var(--text)',
                     appearance: 'none' }}>
-                  {MF_TYPES.map(t => (
-                    <option key={t} value={t}>{MF_META[t].emoji} {MF_META[t].label}</option>
-                  ))}
+                 {MF_FORM_TYPES.map(t => (
+  <option key={t} value={t}>
+    {MF_META[t].emoji} {MF_META[t].label}
+  </option>
+))}
                 </select>
               </div>
             )}
@@ -1131,13 +1149,13 @@ setLoading(false)
                       fontWeight:500 }}>
                       {TYPE_META[inv.type as InvestmentType]?.emoji ?? ''}{' '}
                       {TYPE_META[inv.type as InvestmentType]?.label ?? inv.type}
-                      {inv.type === 'mf' &&
- inv.mfType &&
- MF_META[inv.mfType as MutualFundType] && (
+                      {inv.type === 'mf' && inv.mfType && (
   <>
     {' '}•{' '}
-    <span style={{ color:'var(--gold)', fontWeight:600 }}>
-      {MF_META[inv.mfType as MutualFundType].label}
+    <span style={{ color: 'var(--gold)', fontWeight: 600 }}>
+      {MF_META[inv.mfType as MutualFundType]?.label ??
+       MF_TYPE_META[inv.mfType as MfType] ??
+       inv.mfType}
     </span>
   </>
 )}

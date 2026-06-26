@@ -72,21 +72,11 @@ const VALID_MF_TYPES = [
   "flexicap",
   "international",
   "debt",
-  "commodity"
+  "commodity",
+  "elss",
+  "hybrid",
+  "index"
 ];
-
-
-const SIP_TO_INVESTMENT_MF = {
-  index: "nifty50",
-  flexicap: "flexicap",
-  largecap: "largecap",
-  midcap: "midcap",
-  smallcap: "smallcap",
-
-  // choose how you want to classify these
-  elss: "flexicap",
-  hybrid: "debt",
-}
 
 const VALID_INCOME_CATEGORIES = [
   "salary", "freelance", "business",
@@ -457,7 +447,7 @@ const liveIncomeKey =
   monthlyTotals.length > 0
     ? amountToIncomeKey(annualisedIncome)
     : (profile.income ?? "<3L>");
-    
+
   console.log('live income key',annualisedIncome)
   console.log('knowledge score',profile.experience)
   console.log('total investments',profile.totalinvestments)
@@ -1279,6 +1269,9 @@ if (error) return res.status(500).json({ error: error.message })
 
 let next_execution_date = start_date
 console.log('logging in investments table')
+console.log("req.body.mf_type =", req.body.mf_type);
+console.log("mf_type =", mf_type);
+//console.log("mapped =", SIP_TO_INVESTMENT_MF[mf_type]);
 // If start_date is today or in the past, execute immediately
 if (start_date <= today) {
 const { data: invData, error: invError } = await supabaseAdmin
@@ -1287,10 +1280,7 @@ const { data: invData, error: invError } = await supabaseAdmin
     user_id: userId,
     date: start_date,
     type: investment_type,
-    mfType:
-  investment_type === "mf"
-    ? SIP_TO_INVESTMENT_MF[mf_type]
-    : null,
+    mfType:mf_type,
     amount,
     note: note ? `[SIP] ${note}` : `[SIP] Auto-logged ${frequency} SIP`,
     sip_id: sip.id,

@@ -122,7 +122,7 @@ export default function AllocationPage() {
   const [error, setError] = useState('')
   const [valamLevel, setValamLevel] = useState(3)
   const [investments, setInvestments] = useState<Investment[]>([])
-  const [risk, setRisk] = useState<RiskLevel>('medium')
+  const [risk, setRisk] = useState<RiskLevel>('low')
   const[dark,setDark] = useState(false);
   const [age, setAge] = useState(0);
   const [valamLevelName, setValamLevelName] = useState('')
@@ -156,6 +156,7 @@ darc()
       const json = await res.json()
       setAge(json.profile?.age ?? 0)
       setValamLevel(json.profile?.valamLevel ?? 3)
+      setRisk(json.profile?.risk_level ?? 'low')
       setLoading(false)
       setValamLevelName(json.profile?.valam_level_name ?? json.profile?.valamLevelName ?? '')
     }
@@ -452,7 +453,30 @@ for (const inv of investments) {
 
                 <select
                   value={risk}
-                  onChange={e => setRisk(e.target.value as RiskLevel)}
+                  onChange={async e => {
+  const newRisk = e.target.value as RiskLevel
+
+  setRisk(newRisk)
+
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session) return
+
+  const BASE =
+    process.env.NEXT_PUBLIC_BACKEND_URL ??
+    'http://localhost:5000'
+
+  await fetch(`${BASE}/profile/risk`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      risk: newRisk,
+    }),
+  })
+}}
                   style={{
                     background: 'var(--surface2)', border: '1px solid var(--border-md)',
                     borderRadius: 8, padding: '8px 14px', fontSize: 13,

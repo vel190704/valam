@@ -369,30 +369,96 @@ app.get("/profile", requireUser, async (req, res) => {
   console.log('total liabilities',totalLiabilities)
   console.log(computedNetWorth)
   // ── Compute live savings rate and income from FY transactions ──────────────
-  const fyStart = getFinancialYearStart();
-  const fyDate  = new Date(fyStart);
-  const nowDate = new Date();
-  const monthsElapsed = Math.max(1,
-    (nowDate.getFullYear() - fyDate.getFullYear()) * 12 +
-    (nowDate.getMonth() - fyDate.getMonth()) + 1
-  );
-  const [liveInvResult, liveIncResult] = await Promise.all([
-    supabaseAdmin.from('investments').select('amount').eq('user_id', req.user.id).gte('date', fyStart),
-    supabaseAdmin.from('income_entries').select('amount').eq('user_id', req.user.id).gte('date', fyStart),
-  ]);
-  const totalInvestedFY    = (liveInvResult.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
-  const totalIncomeFY      = (liveIncResult.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
-  const fyLiveSavingsRate  = totalIncomeFY > 0 ? (totalInvestedFY / totalIncomeFY) * 100 : 0;
-  const annualisedIncome   = (totalIncomeFY / Math.max(1, monthsElapsed)) * 12;
+const fyStart = getFinancialYearStart();
 
-  const liveSavingsKey = totalIncomeFY > 0
-    ? rateToSavingsKey(fyLiveSavingsRate)
-    : (profile.savings_rate ?? '<2');
-  console.log('savings rate',liveSavingsKey)  
-  const liveIncomeKey = totalIncomeFY > 0
+// Start of current month
+const currentMonthStart = new Date();
+currentMonthStart.setDate(1);
+currentMonthStart.setHours(0, 0, 0, 0);
+
+// Start of previous month
+const previousMonthStart = new Date(currentMonthStart);
+previousMonthStart.setMonth(previousMonthStart.getMonth() - 1);
+
+const [investmentRows, incomeRows] = await Promise.all([
+  supabaseAdmin
+    .from("investments")
+    .select("amount,date")
+    .eq("user_id", req.user.id)
+    .gte("date", fyStart)
+    .lt("date", currentMonthStart.toISOString()),
+
+  supabaseAdmin
+    .from("income_entries")
+    .select("amount,date")
+    .eq("user_id", req.user.id)
+    .gte("date", fyStart)
+    .lt("date", currentMonthStart.toISOString()),
+]);
+
+// ---------- Average Monthly Income (excluding current month) ----------
+
+const monthlyIncome = {};
+
+for (const row of incomeRows.data ?? []) {
+  const d = new Date(row.date);
+  const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+  monthlyIncome[key] = (monthlyIncome[key] || 0) + Number(row.amount);
+}
+
+const monthlyTotals = Object.values(monthlyIncome);
+
+const averageMonthlyIncome =
+  monthlyTotals.length > 0
+    ? monthlyTotals.reduce((sum, val) => sum + val, 0) / monthlyTotals.length
+    : 0;
+
+const annualisedIncome = averageMonthlyIncome * 12;
+
+// ---------- Previous Month Savings Rate ----------
+
+let previousMonthIncome = 0;
+let previousMonthInvestment = 0;
+
+for (const row of incomeRows.data ?? []) {
+  const d = new Date(row.date);
+  if (
+    d.getFullYear() === previousMonthStart.getFullYear() &&
+    d.getMonth() === previousMonthStart.getMonth()
+  ) {
+    previousMonthIncome += Number(row.amount);
+  }
+}
+
+for (const row of investmentRows.data ?? []) {
+  const d = new Date(row.date);
+  if (
+    d.getFullYear() === previousMonthStart.getFullYear() &&
+    d.getMonth() === previousMonthStart.getMonth()
+  ) {
+    previousMonthInvestment += Number(row.amount);
+  }
+}
+
+const previousMonthSavingsRate =
+  previousMonthIncome > 0
+    ? (previousMonthInvestment / previousMonthIncome) * 100
+    : 0;
+
+// ---------- Keys ----------
+
+const liveSavingsKey =
+  previousMonthIncome > 0
+    ? rateToSavingsKey(previousMonthSavingsRate)
+    : (profile.savings_rate ?? "<2>");
+
+const liveIncomeKey =
+  monthlyTotals.length > 0
     ? amountToIncomeKey(annualisedIncome)
-    : (profile.income ?? '<3L');
-  console.log('live income key',liveIncomeKey)
+    : (profile.income ?? "<3L>");
+    
+  console.log('live income key',annualisedIncome)
   console.log('knowledge score',profile.experience)
   console.log('total investments',profile.totalinvestments)
   console.log('age',profile.age)
@@ -492,6 +558,27 @@ app.get("/profile", requireUser, async (req, res) => {
     monthlySavingsRate,
   });
 });
+
+app.patch('/profile/risk', requireUser, async (req, res) => {
+  const { risk } = req.body
+
+  if (!['low', 'medium', 'high'].includes(risk)) {
+    return res.status(400).json({ error: 'Invalid risk level' })
+  }
+
+  const { error } = await supabaseAdmin
+    .from('profiles')
+    .update({
+      risk_level: risk,
+    })
+    .eq('user_id', req.user.id)
+
+  if (error) {
+    return res.status(500).json({ error: error.message })
+  }
+
+  res.json({ success: true })
+})
 
 app.post("/profile/ensure", requireUser, async (req, res) => {
   const name = req.body.name ?? req.user.user_metadata?.name ?? "";

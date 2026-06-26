@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { getAllocationByRisk, TYPE_TO_SUGGESTED, type RiskLevel } from '@/lib/allocation'
+import { getAllocationByRisk, getSuggestedAllocation, TYPE_TO_SUGGESTED, type RiskLevel } from '@/lib/allocation'
 import DNavbar from '@/components/layout/dnavbar'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -99,6 +99,7 @@ export default function AllocationPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [valamLevel, setValamLevel] = useState(3)
+  const [age, setAge] = useState(30)
   const [investments, setInvestments] = useState<Investment[]>([])
   const [risk, setRisk] = useState<RiskLevel>('medium')
   const [insight, setInsight] = useState<string | null>(null)
@@ -119,6 +120,7 @@ export default function AllocationPage() {
       const cs = Number(json.calculatedScore ?? json.currentScore ?? 0)
       const liveLevel = cs >= 7.5 ? 8 : (Math.floor(cs) || 1)
       setValamLevel(liveLevel)
+      setAge(Number(json.profile?.age) || 30)
       setInvestments(json.investments ?? [])
       setLoading(false)
     }
@@ -192,7 +194,7 @@ export default function AllocationPage() {
     color: TYPE_COLORS[type] ?? '#888',
   }))
 
-  const suggested: AllocationItem[] = getAllocationByRisk(valamLevel, risk)
+  const suggested: AllocationItem[] = getSuggestedAllocation(age, risk)
 
   // ── Gap analysis ──────────────────────────────────────────────────────
   // Compute actual % by suggested label (using TYPE_TO_SUGGESTED mapping)
@@ -329,7 +331,7 @@ export default function AllocationPage() {
                 border: '1px solid var(--border)', padding: '20px 16px' }}>
                 <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
                   textTransform: 'uppercase', fontWeight: 500, marginBottom: 16 }}>
-                  Suggested · Level {valamLevel} · {risk.charAt(0).toUpperCase() + risk.slice(1)} Risk
+                  Suggested · Age {age} · {risk.charAt(0).toUpperCase() + risk.slice(1)} Risk
                 </div>
                 <Donut slices={suggested} label="Target" total="Ideal mix" />
               </div>

@@ -63,6 +63,11 @@ const VALID_INVESTMENT_TYPES = [
   "mf", "stock", "fd", "crypto", "bond", "etf", "realestate"
 ];
 
+const VALID_PORTFOLIO_MF_TYPES = [
+  "largecap", "midcap", "smallcap", "nifty50",
+  "flexicap", "international", "debt", "commodity"
+];
+
 const VALID_INCOME_CATEGORIES = [
   "salary", "freelance", "business",
   "rental", "interest", "dividend", "other"
@@ -599,7 +604,7 @@ app.get("/investments", requireUser, async (req, res) => {
 });
 
 app.post("/investments", requireUser, async (req, res) => {
-  const { date, type, amount, note } = req.body;
+  const { date, type, amount, mfType, note } = req.body;
 
   if (!type || amount == null) {
     return res.status(400).json({ error: "Missing required fields: type, amount" });
@@ -611,14 +616,21 @@ app.post("/investments", requireUser, async (req, res) => {
     });
   }
 
+  if (type === 'mf' && mfType && !VALID_PORTFOLIO_MF_TYPES.includes(mfType)) {
+    return res.status(400).json({
+      error: `Invalid mfType. Must be one of: ${VALID_PORTFOLIO_MF_TYPES.join(', ')}`
+    });
+  }
+
   const { data, error } = await supabaseAdmin
     .from("investments")
     .insert({
       user_id: req.user.id,
-      date: date ?? null,
+      date:    date ?? null,
       type,
-      amount: Number(amount),
-      note: note ?? null,
+      mf_type: type === 'mf' ? (mfType ?? null) : null,
+      amount:  Number(amount),
+      note:    note ?? null,
     })
     .select()
     .single();

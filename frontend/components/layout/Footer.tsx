@@ -1,34 +1,64 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 
 export default function Footer() {
-  const [hidden, setHidden] = useState(false)
-
-  useEffect(() => {
-    const appPages = ['/dashboard', '/portfolio', '/networth',
-      '/income', '/result', '/onboarding', '/auth', '/profile',
-      '/learning', '/milestones', '/allocation']
-    setHidden(appPages.some(p => window.location.pathname.startsWith(p)))
-  }, [])
-
-  if (hidden) return null
+  const pathname = usePathname()
+  const appPages = [
+    '/dashboard', '/portfolio', '/networth',
+    '/income', '/result', '/onboarding', '/auth', '/profile',
+    '/learning', '/milestones', '/allocation', '/sip', '/calculators',
+    '/knowledge-hub',
+  ]
+  if (appPages.some(p => pathname.startsWith(p))) return null
 
   return (
-    <footer className="border-t border-[#B8924A]/15 bg-[#EFEDE8] dark:bg-[#231512] px-4 py-8 text-[#1E1C18]/60 dark:text-[#F5F0E8]/60 sm:px-6 lg:px-8">
+    <footer
+      style={{
+        borderTop: '1px solid var(--border)',
+        background: 'var(--surface)',
+        color: 'var(--muted)',
+        padding: '2rem 1rem',
+        transition: 'all .3s ease',
+      }}
+    >
       <div className="mx-auto flex max-w-6xl flex-col gap-4 text-sm sm:flex-row sm:items-center sm:justify-between">
-        <p className="font-serif text-lg font-bold tracking-[0.2em] text-[#B8924A]">
+
+        <p
+          style={{
+            fontFamily: "'Playfair Display', serif",
+            fontSize: '1.125rem',
+            fontWeight: 700,
+            letterSpacing: '0.2em',
+            color: 'var(--gold)',
+          }}
+        >
           VALAM
         </p>
+
         <div className="flex flex-wrap gap-4">
-          <Link className="transition hover:text-[#B8924A]" href="/about">About</Link>
-          <Link className="transition hover:text-[#B8924A]" href="/vision">Vision</Link>
-          <Link className="transition hover:text-[#B8924A]" href="/contact">Contact</Link>
+          {[
+            { href: '/about', label: 'About' },
+            { href: '/vision', label: 'Vision' },
+            { href: '/contact', label: 'Contact' },
+          ].map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              style={{ color: 'var(--muted)', transition: 'color .2s ease' }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--gold)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--muted)')}
+            >
+              {label}
+            </Link>
+          ))}
         </div>
-        <p className="text-xs text-[#1E1C18]/40 dark:text-[#F5F0E8]/40">
+
+        <p style={{ fontSize: '0.75rem', color: 'var(--muted)', opacity: 0.65 }}>
           © {new Date().getFullYear()} VALAM. All rights reserved.
         </p>
+
       </div>
     </footer>
   )

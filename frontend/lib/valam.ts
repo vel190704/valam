@@ -171,7 +171,7 @@ export function calculateVALAM(input: VALAMInput): VALAMResult {
   let wealthVelocity:     number
   let investmentVelocityScore: number
   let rawPosition = 0
-
+console.log('networth',input.netWorth)
   if (input.netWorth !== undefined && input.netWorth !== null) {
     console.log('executing logged in logic now')
     // PDF formula: real net worth data available
@@ -181,6 +181,11 @@ export function calculateVALAM(input: VALAMInput): VALAMResult {
     totalInvestments,
    input.age
 )
+console.log('nw',netWorthScore)
+console.log('inv vel scor',investmentVelocityScore)
+console.log('savingsscore',savingsScore)
+console.log('inc score',incomeScore)
+console.log('exp score',experienceScore)
     rawPosition =
     0.28 * netWorthScore +
     0.32 * investmentVelocityScore +

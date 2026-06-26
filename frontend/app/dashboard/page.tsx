@@ -471,6 +471,9 @@ export default function DashboardPage() {
                   <span style={{ fontSize: 11, color: 'var(--muted)' }}>
                     {liveLevelName} · Level {liveLevel}
                   </span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                     · Score:  {liveScore}
+                  </span>
                 </div>
               </div>
             </div>

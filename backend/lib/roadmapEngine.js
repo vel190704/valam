@@ -40,12 +40,15 @@ function fmtINR(n) {
 
 // ── Task builders ─────────────────────────────────────────────────────────────
 
-function taskEmergencyFund(monthlyIncome) {
-  const target = monthlyIncome > 0 ? fmtINR(monthlyIncome * 3) : '3 months of expenses'
+function taskEmergencyFund(monthlyIncome, emergencyMonthsCovered, emergencyFundTarget) {
+  const covered = emergencyMonthsCovered > 0
+    ? `You currently have ${emergencyMonthsCovered} months covered.`
+    : 'You have no emergency fund yet.'
+  const targetStr = emergencyFundTarget > 0 ? fmtINR(emergencyFundTarget) : fmtINR(monthlyIncome * 6)
   return {
     taskType: 'build_emergency_fund',
     title:    'Build your emergency fund first',
-    detail:   `Before investing more, save ${target} in a liquid savings account or short-term FD. This safety net protects every rupee you invest.`,
+    detail:   `${covered} Build up to ${targetStr} (6 months of income) in a liquid savings account before scaling investments.`,
     allowAllocationDiscussion: false,
   }
 }
@@ -163,6 +166,24 @@ function taskLevelProgression(currentLevel, currentLevelName, nextLevelName, val
   }
 }
 
+function taskClearDebt() {
+  return {
+    taskType: 'clear_high_interest_debt',
+    title:    'Clear high-interest debt immediately',
+    detail:   'Credit card and personal loan interest (18–36% p.a.) compounds against you every month — paying it off is the highest guaranteed return available right now.',
+    allowAllocationDiscussion: false,
+  }
+}
+
+function taskGetInsurance() {
+  return {
+    taskType: 'get_health_insurance',
+    title:    'Get health insurance coverage',
+    detail:   'A single medical emergency without insurance can erase years of savings. A basic ₹5–10L health cover costs ₹5,000–15,000/year — the highest-ROI financial move you can make.',
+    allowAllocationDiscussion: false,
+  }
+}
+
 // ── Main export ────────────────────────────────────────────────────────────────
 
 /**
@@ -199,28 +220,40 @@ export function determineNextTask(profile, learningLevel, factorScores = null, l
   const fh               = factorScores?.fh               ?? (profile?.breakdown?.financialHealthScore ?? 4)
 
   // ── Live context ──────────────────────────────────────────────────────────
-  const totalInvestments   = liveContext.totalInvestments  ?? 0
-  const monthlySavingsRate = liveContext.monthlySavingsRate ?? null
-  const monthlyIncome      = liveContext.monthlyIncome     ?? 0
-  const hasRecentSIP       = liveContext.hasRecentSIP      ?? false
-  const netWorth           = liveContext.netWorth          ?? 0
-  const equityPct          = liveContext.equityPct         ?? 100
-  const goldPct            = liveContext.goldPct           ?? 0
-  const debtPct            = liveContext.debtPct           ?? 0
-  const experienceKey      = liveContext.experienceKey     ?? (profile?.experience ?? 'beginner')
+  const totalInvestments       = liveContext.totalInvestments       ?? 0
+  const monthlySavingsRate     = liveContext.monthlySavingsRate     ?? null
+  const monthlyIncome          = liveContext.monthlyIncome          ?? 0
+  const hasRecentSIP           = liveContext.hasRecentSIP           ?? false
+  const hasActiveSIP           = liveContext.hasActiveSIP           ?? false
+  const emergencyMonthsCovered = liveContext.emergencyMonthsCovered ?? 0
+  const emergencyFundTarget    = liveContext.emergencyFundTarget    ?? 0
+  const completedTopics        = liveContext.completedTopics        ?? 0
+  const userGoal               = liveContext.userGoal               ?? 'wealth'
+  const netWorth               = liveContext.netWorth               ?? 0
+  const equityPct              = liveContext.equityPct              ?? 100
+  const goldPct                = liveContext.goldPct                ?? 0
+  const debtPct                = liveContext.debtPct                ?? 0
+  const experienceKey          = liveContext.experienceKey          ?? (profile?.experience ?? 'beginner')
 
   // ── Build ordered task list by priority ───────────────────────────────────
   const candidates = []
 
-  // P1: Emergency fund
-  if (emergencyFund === 'none' || fh <= 3) {
-    candidates.push({ priority: 1, factor: 'financialHealth', ...taskEmergencyFund(monthlyIncome) })
+  // P1: Financial health — debt, emergency fund, insurance (all can appear simultaneously)
+  if (highInterestDebt === 'significant' || highInterestDebt === 'some') {
+    candidates.push({ priority: 1, factor: 'financialHealth', ...taskClearDebt() })
+  }
+  if (emergencyFund === 'none' || emergencyMonthsCovered < 3) {
+    candidates.push({ priority: 1, factor: 'financialHealth',
+      ...taskEmergencyFund(monthlyIncome, emergencyMonthsCovered, emergencyFundTarget) })
+  }
+  if (healthInsurance === 'no') {
+    candidates.push({ priority: 1, factor: 'financialHealth', ...taskGetInsurance() })
   }
 
   // P2: Active investing
   if (totalInvestments === 0) {
     candidates.push({ priority: 2, factor: 'wealthVelocity', ...taskFirstInvestment() })
-  } else if (!hasRecentSIP) {
+  } else if (!hasActiveSIP) {
     candidates.push({ priority: 2, factor: 'wealthVelocity', ...taskStartSIP() })
   }
 

@@ -607,7 +607,13 @@ setLoading(false)
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ date: new Date().toISOString().slice(0, 10), type: inv.type, amount: inv.amount, note: inv.note ?? undefined }),
+      body: JSON.stringify({
+        date: new Date().toISOString().slice(0, 10),
+        type: inv.type,
+        mfType: inv.type === 'mf' ? (inv.mfType ?? undefined) : undefined,
+        amount: inv.amount,
+        note: inv.note ?? undefined,
+      }),
     })
     if (!res.ok) {
       const j = await res.json() as { error?: string }

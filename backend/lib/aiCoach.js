@@ -169,6 +169,9 @@ RULES — follow ALL of these with no exceptions:
 - Net worth: ${nwStr}
 - Portfolio allocation: ${allocStr}
 - Has active SIP: ${ctx.hasRecentSIP ? 'Yes' : 'No'}
+- Emergency fund: ${ctx.emergencyMonthsCovered > 0 ? `${ctx.emergencyMonthsCovered} months covered (target ${ctx.emergencyFundTarget > 0 ? '₹' + Math.round(ctx.emergencyFundTarget/1000) + 'K' : 'unknown'})` : 'none yet'}
+- Financial goal: ${ctx.userGoal ?? 'wealth building'}
+- Learning topics completed: ${ctx.completedTopics ?? 0}
 - Experience: ${ctx.experienceKey ?? 'beginner'}
 
 Task to focus on: "${task?.title ?? 'Build your financial habits'}"

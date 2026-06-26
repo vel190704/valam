@@ -193,11 +193,11 @@ function ChartPlaceholder({ label }: { label: string }) {
 // ── Shared sub-components ──────────────────────────────────────────────────────
 
 function SliderRow({
-  label, value, min, max, step, onChange, display, prefix = '',
+  label, value, min, max, step, onChange, display, prefix = '', hint,
 }: {
   label: string; value: number; min: number; max: number
   step: number; onChange: (v: number) => void
-  display?: string; prefix?: string
+  display?: string; prefix?: string; hint?: string
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -215,6 +215,14 @@ function SliderRow({
         <span>{prefix}{min.toLocaleString('en-IN')}</span>
         <span>{prefix}{max.toLocaleString('en-IN')}</span>
       </div>
+      {hint && (
+        <div style={{
+          fontSize: 10, color: 'var(--muted)', fontStyle: 'italic',
+          marginTop: 2, lineHeight: 1.5,
+        }}>
+          💡 {hint}
+        </div>
+      )}
     </div>
   )
 }
@@ -253,6 +261,76 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
     <div style={{ fontFamily: 'Playfair Display,serif', fontSize: 17,
       fontWeight: 600, color: 'var(--text)', marginBottom: 16 }}>
       {children}
+    </div>
+  )
+}
+
+function CalcIntro({ what, why, params }: {
+  what: string
+  why: string
+  params: { name: string; explain: string }[]
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={{
+      background: 'var(--surface2)',
+      border: '1px solid var(--border)',
+      borderRadius: 12,
+      padding: '12px 16px',
+      marginBottom: 20,
+    }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          width: '100%', padding: 0, fontFamily: 'Inter,sans-serif',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 14 }}>📖</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--gold)' }}>
+            What is this calculator?
+          </span>
+        </div>
+        <span style={{
+          fontSize: 12, color: 'var(--muted)',
+          transform: open ? 'rotate(180deg)' : 'none',
+          transition: 'transform 0.2s', display: 'inline-block',
+        }}>▾</span>
+      </button>
+      {open && (
+        <div style={{ marginTop: 12 }} className="calc-enter">
+          <div style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.6, marginBottom: 10 }}>
+            <span style={{ fontWeight: 600 }}>What it does: </span>{what}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.6, marginBottom: 12 }}>
+            <span style={{ fontWeight: 600 }}>Why it matters: </span>{why}
+          </div>
+          <div style={{
+            fontSize: 11, fontWeight: 700, color: 'var(--muted)',
+            textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 8,
+          }}>
+            What each parameter means
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {params.map(p => (
+              <div key={p.name} style={{
+                background: 'var(--surface)', borderRadius: 8,
+                padding: '8px 12px',
+                borderLeft: '3px solid var(--gold)',
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
+                  {p.name}
+                </span>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                  {' — '}{p.explain}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -371,6 +449,17 @@ function InvestmentCalc() {
       inputs={
         <>
           <SectionTitle>Investment Calculator</SectionTitle>
+          <CalcIntro
+            what="Simulates how much your money grows when you invest regularly (SIP), increase it each year (Step-up), or invest a one-time amount (Lumpsum). It uses compound interest to project your future corpus."
+            why="Most people underestimate how powerful small monthly investments are over time. This calculator makes that visible — ₹5,000/month for 20 years at 12% becomes over ₹49 lakhs."
+            params={[
+              { name: 'Monthly SIP', explain: 'The fixed amount you invest every month. Start as low as ₹500.' },
+              { name: 'Annual Step-up %', explain: 'How much you increase your SIP each year. Even 10% step-up dramatically boosts your final corpus.' },
+              { name: 'Lumpsum Amount', explain: 'A one-time investment made today, then left to grow.' },
+              { name: 'Expected Annual Return (%)', explain: 'The average yearly growth rate you expect. Index funds historically return 10–14% per year in India.' },
+              { name: 'Investment Duration', explain: 'How many years you plan to stay invested. Longer = much more growth due to compounding.' },
+            ]}
+          />
           <div style={{ display: 'flex', gap: 6, background: 'var(--surface2)',
             borderRadius: 10, padding: 4 }}>
             {(['sip', 'stepup', 'lumpsum'] as const).map(m => (
@@ -497,6 +586,17 @@ function GoalCalc() {
       inputs={
         <>
           <SectionTitle>Goal Planner</SectionTitle>
+          <CalcIntro
+            what="Works backwards from a financial goal — tells you exactly how much SIP you need to start today to reach your target amount by your deadline."
+            why="Instead of guessing, this gives you a precise monthly number for any goal: a car, home down payment, child's education, or emergency fund."
+            params={[
+              { name: 'Goal Name', explain: 'What you are saving for. Just a label to make results personal.' },
+              { name: 'Goal Amount', explain: 'The total amount you need to reach. E.g. ₹20L for a car down payment.' },
+              { name: 'Years to Goal', explain: 'How many years you have before you need the money.' },
+              { name: 'Expected Return (%)', explain: 'Average annual return from your investments. Use 10–12% for equity mutual funds.' },
+              { name: 'Existing Savings', explain: 'Any amount you already have saved towards this goal. Reduces the SIP you need.' },
+            ]}
+          />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span style={{ fontSize: 12, color: 'var(--muted)' }}>Goal Name</span>
             <input type="text" value={goalName}
@@ -631,6 +731,18 @@ function FireCalc() {
       inputs={
         <>
           <SectionTitle>FIRE Calculator</SectionTitle>
+          <CalcIntro
+            what="FIRE stands for Financial Independence, Retire Early. This calculator tells you how much total wealth (corpus) you need to never work for money again — and how long it will take you to get there."
+            why="The core idea: if your investments generate more money each month than you spend, you are financially free. This calculator finds that magic number for your lifestyle."
+            params={[
+              { name: 'Monthly Expenses', explain: 'What you spend per month today. Your FIRE corpus is built around covering this forever.' },
+              { name: 'Inflation Rate (%)', explain: 'How much prices rise each year. In India, ~6% is realistic. This is why ₹50K today becomes ₹90K in expenses 10 years from now.' },
+              { name: 'Safe Withdrawal Rate (%)', explain: 'The % of your corpus you withdraw each year. 4% is the most researched safe rate — meaning a ₹1 Cr corpus can safely give you ₹4L per year forever.' },
+              { name: 'Expected Return (%)', explain: 'Annual growth rate of your invested corpus. 10–12% for a balanced equity+debt portfolio.' },
+              { name: 'Current Investments', explain: 'What you already have invested. This is your head start towards your FIRE number.' },
+              { name: 'Monthly Savings', explain: 'What you can invest each month towards building your FIRE corpus.' },
+            ]}
+          />
           <SliderRow label="Current Monthly Expenses" value={monthlyExp}
             min={5000} max={500000} step={1000} onChange={touch(setMonthlyExp)} prefix="₹" />
           <SliderRow label="Expected Inflation (%)" value={inflation}
@@ -759,6 +871,15 @@ function InflationCalc() {
       inputs={
         <>
           <SectionTitle>Inflation Calculator</SectionTitle>
+          <CalcIntro
+            what="Shows how much a rupee amount today will be worth in the future after inflation erodes its purchasing power — and how much you will actually need to maintain your current lifestyle."
+            why="₹1 lakh today is NOT ₹1 lakh in 10 years. At 6% inflation, you will need ₹1.79 lakh just to buy the same things. This calculator makes inflation tangible."
+            params={[
+              { name: 'Current Amount', explain: 'The amount in today\'s rupees whose future value you want to find.' },
+              { name: 'Inflation Rate (%)', explain: 'The expected yearly price increase. India\'s average is 5–7%. Use 6% as a conservative estimate.' },
+              { name: 'Years', explain: 'How far into the future you want to see the impact of inflation.' },
+            ]}
+          />
           <SliderRow label="Current Amount" value={amount}
             min={10000} max={50000000} step={10000} onChange={touch(setAmount)} prefix="₹" />
           <SliderRow label="Inflation Rate (%)" value={inflation}
@@ -868,6 +989,15 @@ function CagrCalc() {
       inputs={
         <>
           <SectionTitle>CAGR Calculator</SectionTitle>
+          <CalcIntro
+            what="CAGR (Compound Annual Growth Rate) is the single yearly percentage that smooths out all the ups and downs of an investment to show its true annual growth. It is the honest measure of how well an investment performed."
+            why="If someone says their investment went from ₹1L to ₹2L in 5 years, that sounds good — but the CAGR is only 14.9%. Knowing CAGR lets you compare any two investments fairly, regardless of how different their time periods are."
+            params={[
+              { name: 'Initial Value', explain: 'The amount you invested at the start.' },
+              { name: 'Final Value', explain: 'What your investment is worth today (or at the end of the period).' },
+              { name: 'Duration (Years)', explain: 'How long the investment was held. CAGR only makes sense over time — the longer the period, the more meaningful the number.' },
+            ]}
+          />
           <SliderRow label="Initial Investment" value={initial}
             min={1000} max={10000000} step={1000} onChange={touch(setInitial)} prefix="₹" />
           <SliderRow label="Final Value" value={final}

@@ -81,7 +81,7 @@ export default function ResultPage() {
 
       try {
         const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000'
-        await fetch(`${BASE}/profile/save-assessment`, {
+        const saveRes = await fetch(`${BASE}/profile/save-assessment`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -100,7 +100,6 @@ export default function ResultPage() {
             valamLevelName:     calculated.positionLevelName,
             potentialLevel:     calculated.potentialLevel,
             potentialLevelName: calculated.potentialLevelName,
-            
             breakdown: {
               savingsScore:     calculated.breakdown.savingsScore,
               investmentsScore: calculated.breakdown.investmentVelocityScore,
@@ -109,6 +108,15 @@ export default function ResultPage() {
             },
           }),
         })
+
+        if (saveRes.ok) {
+          ;['valam_name','valam_age','valam_knowledge','valam_income',
+            'valam_savings','valam_investments','valam_goal','valam_result'
+          ].forEach(k => sessionStorage.removeItem(k))
+        } else {
+          const errBody = await saveRes.json().catch(() => ({}))
+          console.error('Failed to save profile:', saveRes.status, errBody)
+        }
       } catch (err) {
         console.error('Failed to save profile:', err)
       }

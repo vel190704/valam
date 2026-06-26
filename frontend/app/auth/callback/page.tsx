@@ -71,11 +71,11 @@ export default function AuthCallbackPage() {
           'pendingAssessment'
         )
 
-        router.replace('/')
+        router.replace('/dashboard')
 
       } else {
         router.replace(
-          '/onboarding/step1'
+          '/result'
         )
       }
     } catch (err) {
@@ -84,7 +84,7 @@ export default function AuthCallbackPage() {
         err
       )
       router.replace(
-        '/onboarding/step1'
+        '/result'
       )
     }
   } }
@@ -150,11 +150,11 @@ export default function AuthCallbackPage() {
           'pendingAssessment'
         )
 
-        router.replace('/')
+        router.replace('/dashboard')
 
       } else {
         router.replace(
-          '/onboarding/step1'
+          '/result'
         )
       }
     } catch (err) {
@@ -163,7 +163,7 @@ export default function AuthCallbackPage() {
         err
       )
       router.replace(
-        '/onboarding/step1'
+        '/result'
       )
     }
   }

@@ -185,7 +185,7 @@ export default function DashboardPage() {
           })
           setInvestments(json.investments ?? [])
           setNetworthItems(json.networthItems ?? [])
-          setSavingsRate(json.liveSavingsRate ?? 0)
+          setSavingsRate(Math.round(json.liveSavingsRate ?? 0))
           setMonthlySavingsRate(json.monthlySavingsRate ?? null)
           setDataSource('live')
         }
@@ -492,12 +492,13 @@ export default function DashboardPage() {
         padding: '0 28px', height: 44, display: 'flex', alignItems: 'stretch',
         position: 'sticky', top: 52, zIndex: 19
       }}>
-        {(['Dashboard', 'Portfolio', 'Net Worth', 'Goals', 'Allocation'] as const).map(tab => (
+        {(['Dashboard', 'Portfolio', 'Net Worth', 'Goals', 'Allocation', 'Calculators'] as const).map(tab => (
           <div key={tab}
             onClick={() => {
               if (tab === 'Portfolio') router.push('/portfolio')
               if (tab === 'Net Worth') router.push('/networth')
               if (tab === 'Allocation') router.push('/allocation')
+              if (tab === 'Calculators') router.push('/calculators')
             }}
             style={{
               display: 'flex', alignItems: 'center', gap: 7,
@@ -505,7 +506,7 @@ export default function DashboardPage() {
               color: tab === 'Dashboard' ? 'var(--gold)' : 'var(--muted)',
               borderBottom: tab === 'Dashboard'
                 ? '2.5px solid var(--gold)' : '2.5px solid transparent',
-              cursor: tab === 'Portfolio' || tab === 'Net Worth' || tab === 'Allocation' ? 'pointer' : 'default'
+              cursor: tab === 'Portfolio' || tab === 'Net Worth' || tab === 'Allocation' || tab === 'Calculators' ? 'pointer' : 'default'
             }}>
             {tab}
           </div>
@@ -546,6 +547,9 @@ export default function DashboardPage() {
                   <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--gold)' }} />
                   <span style={{ fontSize: 11, color: 'var(--muted)' }}>
                     {liveLevelName} · Level {liveLevel}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                    {' · '}Score: {liveScore}
                   </span>
                 </div>
               </div>

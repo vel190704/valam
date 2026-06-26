@@ -10,6 +10,20 @@
  */
 
 /**
+ * Builds a composite cache key from score + investment total + savings rate.
+ * Busts the cache whenever investments or savings change, even if the VALAM
+ * score hasn't moved yet (score lags behind behaviour changes by 1 save cycle).
+ *
+ * @param {number} positionScore   - profile.valamScore
+ * @param {number} totalInvested   - total portfolio value in ₹
+ * @param {number} savingsRate     - live savings rate (%)
+ * @returns {string}
+ */
+export function buildCompositeKey(positionScore, totalInvested, savingsRate) {
+  return `${Number(positionScore).toFixed(4)}|${Math.round(totalInvested)}|${Math.round(savingsRate * 100)}`
+}
+
+/**
  * Reads the cached roadmap explanation for a user.
  * Returns null when no cache entry exists or on any read error.
  *
@@ -18,7 +32,7 @@
  * @returns {Promise<{
  *   explanation:   string,
  *   taskType:      string,
- *   scoreSnapshot: number,
+ *   scoreSnapshot: string,
  *   generatedAt:   string
  * } | null>}
  */
@@ -39,7 +53,7 @@ export async function getCachedRoadmap(supabase, userId) {
   return {
     explanation:   data.cached_roadmap_explanation,
     taskType:      data.cached_roadmap_task_type,
-    scoreSnapshot: Number(data.cached_roadmap_score_snapshot),
+    scoreSnapshot: data.cached_roadmap_score_snapshot,
     generatedAt:   data.cached_roadmap_generated_at,
   };
 }

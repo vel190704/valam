@@ -501,7 +501,6 @@ setLoading(false)
     const json = await res.json() as { sip?: SipPlan; immediateInvestment?: Investment; error?: string }
     if (!res.ok) { setSipError(json.error ?? 'Failed to create SIP'); setSipSaving(false); return }
     if (json.sip) setSipPlans(prev => [json.sip!, ...prev])
-      console.log(json.sip)
     await loadInvestments()
     setSipAmount(''); setSipNote(''); setSipType('mf'); setSipMfType('flexicap')
     setSipFreq('monthly'); setSipStartDate(new Date().toISOString().slice(0, 10))

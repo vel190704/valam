@@ -10,11 +10,9 @@ export default function AuthCallbackPage() {
     async function handleCallback() {
       try {
         const code = new URLSearchParams(window.location.search).get('code')
-        console.log('Callback hit, code present:', !!code)
 
         if (code) {
           const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-          console.log('Exchange result:', { success: !!data?.session, error: error?.message })
 
           if (data?.session) {
             const { data: profile } = await supabase
@@ -27,14 +25,12 @@ export default function AuthCallbackPage() {
               router.replace('/dashboard')
               return
 } else {
-  console.log('checking if user filled form')
   const pending =
     localStorage.getItem(
       'pendingAssessment'
     )
 
   if (pending) {
-    console.log('user has filled the form so creating new profile with input data');
     try {
 
       const BASE =
@@ -66,7 +62,6 @@ export default function AuthCallbackPage() {
       )
 
       if (res.ok) {
-        console.log('data saved so removing local cache now')
         localStorage.removeItem(
           'pendingAssessment'
         )
@@ -93,7 +88,6 @@ export default function AuthCallbackPage() {
         // No code in URL — check if session already exists
         // (happens when Supabase processes the hash fragment automatically)
         const { data: { session } } = await supabase.auth.getSession()
-        console.log('Existing session check:', !!session)
 
         if (session) {
           const { data: profile } = await supabase
@@ -106,14 +100,12 @@ export default function AuthCallbackPage() {
               router.replace('/dashboard')
               return
 } else {
-  console.log('checking if user filled form')
   const pending =
     localStorage.getItem(
       'pendingAssessment'
     )
 
   if (pending) {
-    console.log('user has filled the form so creating new profile with input data');
     try {
 
       const BASE =
@@ -145,7 +137,6 @@ export default function AuthCallbackPage() {
       )
 
       if (res.ok) {
-        console.log('data saved so removing local cache now')
         localStorage.removeItem(
           'pendingAssessment'
         )

@@ -84,7 +84,7 @@ export default function LoginPage() {
         .maybeSingle();
 
       if (profileError) {
-        console.log(profileError);
+        console.error(profileError);
       }
 
       if (!profile) {
@@ -98,7 +98,7 @@ export default function LoginPage() {
             });
 
         if (insertError) {
-          console.log(insertError);
+          console.error(insertError);
         }
         if (!profile) {
 

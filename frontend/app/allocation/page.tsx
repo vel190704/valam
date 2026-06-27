@@ -11,6 +11,7 @@ import {
   type RiskLevel
 } from '@/lib/allocation'
 import DNavbar from '@/components/layout/dnavbar'
+import Disclaimer from '@/components/ui/Disclaimer'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type InvestmentType = 'mf' | 'stock' | 'fd' | 'crypto' | 'bond' | 'etf'|'commodity'
@@ -158,7 +159,9 @@ darc()
 
       const json = await res.json()
       setAge(json.profile?.age ?? 0)
-      setValamLevel(json.profile?.valamLevel ?? 3)
+      const rawScore = json.calculatedScore ?? json.currentScore ?? 0
+      const liveLevel = rawScore >= 7.5 ? 8 : (rawScore > 0 ? Math.floor(rawScore) : (json.profile?.valamLevel ?? 3))
+      setValamLevel(liveLevel)
       setRisk((json.profile?.risk_profile as RiskLevel) ?? 'medium')
       setLoading(false)
       setValamLevelName(json.profile?.valam_level_name ?? json.profile?.valamLevelName ?? '')
@@ -548,6 +551,10 @@ for (const inv of investments) {
             {/* Gap analysis table */}
             <div style={{ background: 'var(--surface)', borderRadius: 18,
               border: '1px solid var(--border)', padding: '20px 22px' }}>
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 6, fontStyle: 'italic' }}>
+                Suggested ranges are educational references based on general wealth-building principles,
+                not personalised investment advice.
+              </div>
               <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
                 textTransform: 'uppercase', fontWeight: 500, marginBottom: 16 }}>
                 Gap Analysis
@@ -599,6 +606,8 @@ for (const inv of investments) {
                 </div>
               ))}
               </div>
+
+              <Disclaimer variant="banner" />
 
               {(insight || insightLoading) && (
                 <div style={{
@@ -732,6 +741,7 @@ for (const inv of investments) {
                 <span style={{ color: 'var(--red)', fontWeight: 600 }}>Red</span> = under-allocated vs. suggested
               </div>
             </div>
+            <Disclaimer variant="full" />
       </>
         )}
       </div>

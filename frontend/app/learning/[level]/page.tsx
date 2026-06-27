@@ -77,6 +77,8 @@ interface LevelData {
   }
 }
 
+const TOTAL_TOPICS_ALL_LEVELS = 115
+
 // ── Phase 10: CSS keyframes + dark mode via CSS variables ─────────────────────
 
 const CSS = `
@@ -320,8 +322,14 @@ export default function LearningHubPage() {
     ])
 
     if (profileRes.ok) {
-      const pJson = await profileRes.json() as { profile: { valamLevel: number } }
-      setUserLevel(pJson.profile?.valamLevel ?? 1)
+      const pJson = await profileRes.json() as {
+        profile: { valamLevel: number }
+        calculatedScore?: number
+        currentScore?: number
+      }
+      const rawScore = pJson.calculatedScore ?? pJson.currentScore ?? 0
+      const liveLevel = rawScore >= 7.5 ? 8 : (rawScore > 0 ? Math.floor(rawScore) : (pJson.profile?.valamLevel ?? 1))
+      setUserLevel(liveLevel)
     }
 
     if (recentRes.ok) {
@@ -401,8 +409,11 @@ export default function LearningHubPage() {
     totalTopics:     Object.values(levelDataMap).reduce((s, d) => s + d.summary.totalTopics, 0),
   }
 
-  // Journey progress ring = (userLevel-1) / 7 steps completed
-  const journeyPct     = Math.round(((overallStats.userLevel - 1) / 7) * 100)
+  const completedAcrossAllLevels = Object.values(levelDataMap)
+    .reduce((s, d) => s + d.summary.topicsCompleted, 0)
+  const journeyPct = TOTAL_TOPICS_ALL_LEVELS > 0
+    ? Math.round((completedAcrossAllLevels / TOTAL_TOPICS_ALL_LEVELS) * 100)
+    : 0
   const currentTier    = tierForLevel(overallStats.userLevel)
   const currentMeta    = LEVEL_META[overallStats.userLevel] ?? LEVEL_META[1]
 
@@ -564,8 +575,8 @@ export default function LearningHubPage() {
               />
               <StatBox
                 label="Topics Completed"
-                value={`${overallStats.topicsCompleted}`}
-                sub={overallStats.totalTopics > 0 ? `of ${overallStats.totalTopics} loaded` : 'expand levels to see'}
+                value={`${completedAcrossAllLevels}`}
+                sub={`of ${TOTAL_TOPICS_ALL_LEVELS} total`}
                 accent="var(--green)"
               />
               <StatBox
@@ -588,7 +599,7 @@ export default function LearningHubPage() {
               </div>
               <div style={{ fontFamily: 'Playfair Display,serif', fontSize: 13,
                 fontWeight: 600, color: 'var(--text)', marginTop: 2 }}>
-                Level {overallStats.userLevel} of 7
+                {completedAcrossAllLevels} of {TOTAL_TOPICS_ALL_LEVELS} topics
               </div>
             </div>
           </div>

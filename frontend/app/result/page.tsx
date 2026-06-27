@@ -12,6 +12,7 @@ import {
   type ExperienceKey,
 } from '@/lib/valam'
 import { supabase } from '@/lib/supabase'
+import Disclaimer from '@/components/ui/Disclaimer'
 
 export default function ResultPage() {
   const router = useRouter()
@@ -412,6 +413,8 @@ export default function ResultPage() {
             </div>
           </div>
         </div>
+
+        <Disclaimer variant="banner" />
 
         <button
           onClick={() => requiresSignup

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LEVEL_NAMES_ARR } from '@/lib/valam'
 import Link from 'next/link'
+import Disclaimer from '@/components/ui/Disclaimer'
 
 interface DashboardData {
   name: string
@@ -995,6 +996,7 @@ export default function DashboardPage() {
               ))}
             </div>
           )}
+          <Disclaimer variant="compact" />
         </div>
 
         {/* ── ROW 3: 3-COL GRID ── */}

@@ -1433,7 +1433,6 @@ note: note ?? null,
 if (error) return res.status(500).json({ error: error.message })
 
 let next_execution_date = start_date
-console.log('logging in investments table')
 // If start_date is today or in the past, execute immediately
 if (start_date <= today) {
 const { data: invData, error: invError } = await supabaseAdmin
@@ -1452,9 +1451,6 @@ const { data: invData, error: invError } = await supabaseAdmin
   })
   .select()
 
-console.log("Investment Insert:", invData)
-console.log("Investment Error:", invError)
-console.log('logged in investments table')
 // Advance to next cycle
 next_execution_date = advanceSipDate(
 start_date, frequency, start_date
@@ -1464,10 +1460,6 @@ await supabaseAdmin
 .update({ next_execution_date })
 .eq('id', sip.id)
 }
-console.log("Returning SIP:", {
-  ...sip,
-  next_execution_date,
-})
 res.status(201).json({
 sip: { ...sip,  next_execution_date:
             next_execution_date.toISOString().slice(0, 10) }

@@ -57,7 +57,7 @@ function taskFirstInvestment() {
   return {
     taskType: 'start_first_sip',
     title:    'Make your first investment',
-    detail:   'You have not made any investments yet. Starting a ₹500/month SIP in an index fund is the single highest-impact action you can take right now.',
+    detail:   'You have not made any investments yet. Many financial educators suggest starting with a small, regular investment — even ₹500/month — as a way to build the habit and learn by doing. Research your options and consider consulting a SEBI-registered adviser.',
     allowAllocationDiscussion: false,
   }
 }
@@ -124,7 +124,7 @@ function taskDiversification(equityPct, goldPct, debtPct) {
     return {
       taskType: 'build_gold_allocation',
       title:    'Build initial gold allocation',
-      detail:   'You have zero gold exposure. A 10% gold allocation improves portfolio stability during equity market downturns.',
+      detail:   'You have zero commodity exposure. Many investors consider adding a small allocation to gold or commodities as a portfolio diversifier. This is a general educational observation, not a specific recommendation.',
       allowAllocationDiscussion: true,
     }
   }
@@ -132,7 +132,7 @@ function taskDiversification(equityPct, goldPct, debtPct) {
     return {
       taskType: 'build_debt_allocation',
       title:    'Build initial debt allocation',
-      detail:   'You have no debt allocation. Adding even 10% to FD or debt funds provides a stability buffer for your equity portfolio.',
+      detail:   'You have no debt or fixed income exposure. Many investment frameworks suggest balancing equity with some fixed income for stability. Consider researching debt funds or fixed deposits based on your goals.',
       allowAllocationDiscussion: true,
     }
   }

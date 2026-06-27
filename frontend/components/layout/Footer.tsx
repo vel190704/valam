@@ -103,6 +103,21 @@ export default function Footer() {
       </p>
 
     </div>
+    <div style={{
+      borderTop: '1px solid var(--border)',
+      paddingTop: 12,
+      marginTop: 12,
+      fontSize: 10,
+      color: 'var(--muted)',
+      lineHeight: 1.7,
+      textAlign: 'center',
+    }}>
+      VALAM is not a SEBI-registered Investment Adviser. All content is for
+      educational purposes only and does not constitute investment advice.
+      Investments are subject to market risks.
+      <br />
+      © {new Date().getFullYear()} VALAM. All rights reserved.
+    </div>
   </footer>
 )
 }

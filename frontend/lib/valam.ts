@@ -173,7 +173,6 @@ export function calculateVALAM(input: VALAMInput): VALAMResult {
   let rawPosition = 0
 
   if (input.netWorth !== undefined && input.netWorth !== null) {
-    console.log('executing logged in logic now')
     // PDF formula: real net worth data available
     netWorthScore       = scoreNetWorth(input.netWorth)
     const totalInvestments = input.totalinvestments ?? 0
@@ -188,22 +187,15 @@ export function calculateVALAM(input: VALAMInput): VALAMResult {
     0.10 * incomeScore +
     0.10 * experienceScore
   } else {
-    console.log('executing fallback logic now')
     // Fallback: no net worth data yet — use investment bracket midpoint for WV
     const investmentAmt = INVESTMENT_MIDPOINTS[input.investments] ?? 5_000
    // const rawVelocity   = input.age > 0 ? investmentAmt / input.age : 0
     investmentVelocityScore = InvestmentVelocity(investmentAmt,input.age)
-    console.log('inv score',investmentVelocityScore)
-    console.log('savng',savingsScore)
-    console.log('inc sc',incomeScore)
-    console.log('exp sco',experienceScore)
     rawPosition =
     0.35 * investmentVelocityScore +
     0.30 * savingsScore +
     0.20 * incomeScore +
     0.15 * experienceScore
-
-    console.log(rawPosition)
     //netWorthScore       = 2  // neutral: treat as] ₹0 net worth (0–50k bracket)
     //wealthVelocity      = Math.round(rawVelocity)
   }

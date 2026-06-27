@@ -2,8 +2,8 @@
  * VALAM score calculation — JS mirror of frontend/lib/valam.ts.
  * Keep in sync with the TypeScript original.
  *
- * PDF position formula:
- *   0.30×NetWorth + 0.30×WealthVelocity + 0.20×Savings
+ * Position formula:
+ *   0.28×NetWorthScore + 0.32×InvestmentVelocity + 0.20×Savings
  *   + 0.10×Income + 0.10×Knowledge
  *
  * Potential formula (unchanged):
@@ -147,11 +147,11 @@ export function calculateVALAM(input) {
     wealthVelocity      = Math.round(rawVelocity)
   }
 
-  // PDF position formula:
-  //   0.30×NetWorth + 0.30×WealthVelocity + 0.20×Savings + 0.10×Income + 0.10×Knowledge
+  // Position formula:
+  //   0.28×NetWorthScore + 0.32×InvestmentVelocity + 0.20×Savings + 0.10×Income + 0.10×Knowledge
   const rawPosition =
-    0.30 * netWorthScore +
-    0.30 * wealthVelocityScore +
+    0.28 * netWorthScore +
+    0.32 * wealthVelocityScore +
     0.20 * savingsScore +
     0.10 * incomeScore +
     0.10 * experienceScore

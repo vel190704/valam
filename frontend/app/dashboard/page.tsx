@@ -28,6 +28,14 @@ interface DashboardData {
   }
 }
 
+interface UserTask {
+  priority: number
+  task_code: string
+  title: string
+  description: string
+  progress: number
+}
+
 interface InvestmentEntry {
   id: string
   date?: string
@@ -122,6 +130,7 @@ export default function DashboardPage() {
   const [savingsRate, setSavingsRate] = useState(0)
   const [monthlySavingsRate, setMonthlySavingsRate] = useState<number | null>(null)
   const [roadmap, setRoadmap] = useState<RoadmapResponse | null>(null)
+  const [tasks, setTasks] = useState<UserTask[]>([])
   const [recentLearning, setRecentLearning] = useState<{ topicName: string; status: string }[]>([])
 
   useEffect(() => {
@@ -137,8 +146,9 @@ export default function DashboardPage() {
       const headers = { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }
 
       try {
-        const [profileRes, milestonesRes, roadmapRes, learningRes] = await Promise.all([
+        const [profileRes, tasksRes, milestonesRes, roadmapRes, learningRes] = await Promise.all([
           fetch(`${BASE}/profile`, { headers }),
+          fetch(`${BASE}/tasks`, { headers }),
           fetch(`${BASE}/milestones`, { headers }),
           fetch(`${BASE}/roadmap`, { headers }),
           fetch(`${BASE}/learning/recent`, { headers }),
@@ -182,6 +192,11 @@ export default function DashboardPage() {
             currentScore: json.currentScore ?? p.valamScore,
             breakdown: p.breakdown,
           })
+          if (tasksRes.ok) {
+            console.log('tasks response',tasksRes)
+            const json = await tasksRes.json()
+            setTasks(json.tasks ?? [])
+}
           setInvestments(json.investments ?? [])
           setNetworthItems(json.networthItems ?? [])
           setSavingsRate(json.liveSavingsRate ?? 0)
@@ -827,98 +842,117 @@ export default function DashboardPage() {
 
         </div>
 
-        {/* ── ROW 2: TASKS AND PROGRESS ── */}
-        <div style={{
-          background: 'var(--surface)', borderRadius: 18, padding: '20px 22px',
-          border: '1px solid var(--border)', marginBottom: 14
-        }}>
-          <div style={{
-            display: 'flex', justifyContent: 'space-between',
-            alignItems: 'center', marginBottom: 14
-          }}>
-            <div>
-              <div style={{
-                fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
-                textTransform: 'uppercase', fontWeight: 500, marginBottom: 4
-              }}>
-                AI Tasks
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--gold)' }}>
-                {roadmap?.task
-                  ? (roadmap.task.nextLevelName
-                    ? `${roadmap.task.currentLevelName} → ${roadmap.task.nextLevelName}`
-                    : roadmap.task.currentLevelName)
-                  : (liveLevel < 8
-                    ? `${liveLevelName} → ${LEVEL_NAMES_ARR[liveLevel]}`
-                    : liveLevelName)}
-              </div>
+       {/* ── ROW 2: TASKS ── */}
+<div style={{
+  background: 'var(--surface)', borderRadius: 18, padding: '20px 22px',
+  border: '1px solid var(--border)', marginBottom: 14
+}}>
+  <div style={{
+    display: 'flex', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 14
+  }}>
+    <div>
+      <div style={{
+        fontSize: 10, color: 'var(--muted)', letterSpacing: '.45px',
+        textTransform: 'uppercase', fontWeight: 500, marginBottom: 4
+      }}>
+        Tasks
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--gold)' }}>
+        Your top priorities
+      </div>
+    </div>
+
+    <div style={{
+      background: 'var(--gold)', color: '#fff', fontSize: 11,
+      fontWeight: 600, padding: '4px 12px', borderRadius: 12
+    }}>
+      {tasks.length} {tasks.length === 1 ? 'Task' : 'Tasks'}
+    </div>
+  </div>
+
+  {tasks.length === 0 ? (
+    <div style={{ padding: '12px 0' }}>
+      <span style={{
+        fontSize: 12,
+        color: 'var(--muted)',
+        lineHeight: 1.6
+      }}>
+        No tasks yet. Try adding your financial data to discover personalized
+        tasks that will help grow your VALAM!
+      </span>
+    </div>
+  ) : (
+    <div style={{ paddingTop: 4 }}>
+      {tasks.map((task, idx) => (
+        <div
+          key={task.task_code}
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 10,
+            marginBottom: idx < tasks.length - 1 ? 14 : 0,
+            paddingBottom: idx < tasks.length - 1 ? 14 : 0,
+            borderBottom:
+              idx < tasks.length - 1
+                ? '1px solid var(--border)'
+                : 'none'
+          }}
+        >
+          <div
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: '50%',
+              flexShrink: 0,
+              marginTop: 1,
+              background: idx === 0 ? 'var(--gold)' : 'var(--surface2)',
+              border: idx > 0 ? '1px solid var(--border)' : 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <span
+              style={{
+                color: idx === 0 ? '#fff' : 'var(--muted)',
+                fontSize: 10,
+                fontWeight: 700
+              }}
+            >
+              {idx + 1}
+            </span>
+          </div>
+
+          <div style={{ flex: 1 }}>
+            <div
+              style={{
+                fontSize: idx === 0 ? 13 : 12,
+                fontWeight: idx === 0 ? 600 : 500,
+                color: idx === 0 ? 'var(--text)' : 'var(--text-sm)',
+                lineHeight: 1.4,
+                marginBottom: 5
+              }}
+            >
+              {task.title}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{
-                fontSize: 9, background: 'rgba(184,146,74,0.12)',
-                color: 'var(--gold)', borderRadius: 8, padding: '2px 8px',
-                fontWeight: 600, letterSpacing: '.4px', verticalAlign: 'middle'
-              }}>
-                AI-POWERED
-              </span>
-              <div style={{
-                background: 'var(--gold)', color: '#fff', fontSize: 11,
-                fontWeight: 600, padding: '4px 12px', borderRadius: 12
-              }}>
-                Level {liveLevel}
-              </div>
+
+            <div
+              style={{
+                fontSize: 11,
+                color: 'var(--muted)',
+                lineHeight: 1.55,
+                marginBottom: 8
+              }}
+            >
+              {task.description}
             </div>
           </div>
-          {(!roadmap || !roadmap.task) ? (
-            <div style={{ padding: '12px 0' }}>
-              <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
-                Keep building your financial habits — check back soon for personalized guidance.
-              </span>
-            </div>
-          ) : (
-            <div style={{ paddingTop: 4 }}>
-              {(roadmap.tasks ?? roadmap.task.tasks ?? [roadmap.task.task]).map((t, idx) => (
-                <div key={t.rank ?? idx}
-                  style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 10,
-                    marginBottom: idx < 2 ? 14 : 0,
-                    paddingBottom: idx < 2 ? 14 : 0,
-                    borderBottom: idx < 2 ? '1px solid var(--border)' : 'none'
-                  }}>
-                  <div style={{
-                    width: 20, height: 20, borderRadius: '50%', flexShrink: 0, marginTop: 1,
-                    background: idx === 0 ? 'var(--gold)' : 'var(--surface2)',
-                    border: idx > 0 ? '1px solid var(--border)' : 'none',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}>
-                    <span style={{ color: idx === 0 ? '#fff' : 'var(--muted)', fontSize: 10, fontWeight: 700 }}>
-                      {idx + 1}
-                    </span>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{
-                      fontSize: idx === 0 ? 13 : 12, fontWeight: idx === 0 ? 600 : 500,
-                      color: idx === 0 ? 'var(--text)' : 'var(--text-sm)', lineHeight: 1.4,
-                      marginBottom: (idx === 0 && roadmap.explanation) || (idx > 0 && t.detail) ? 5 : 0
-                    }}>
-                      {t.title}
-                    </div>
-                    {idx === 0 && roadmap.explanation && (
-                      <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
-                        {roadmap.explanation}
-                      </div>
-                    )}
-                    {idx > 0 && t.detail && (
-                      <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.55 }}>
-                        {t.detail}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
+      ))}
+    </div>
+  )}
+</div>
 
         {/* ── ROW 3: 3-COL GRID ── */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr 1fr', gap: 12 }}>

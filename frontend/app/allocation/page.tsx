@@ -154,9 +154,11 @@ darc()
       if (!res.ok) { setError('Failed to load data'); setLoading(false); return }
 
       const json = await res.json()
+      console.log(json)
       setAge(json.profile?.age ?? 0)
       setValamLevel(json.profile?.valamLevel ?? 3)
-      setRisk(json.profile?.risk_level ?? 'low')
+      console.log('risk level',json.profile.risk_level)
+      setRisk(json.profile?.risk_level)
       setLoading(false)
       setValamLevelName(json.profile?.valam_level_name ?? json.profile?.valamLevelName ?? '')
     }

@@ -128,7 +128,7 @@ function getCurrentAllocation(investments) {
   }
 }
 
-module.exports = {
+export{
   getSuggestedAllocation,
   getCurrentAllocation,
 }

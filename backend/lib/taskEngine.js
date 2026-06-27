@@ -1,11 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
-const {
-  getSuggestedAllocation,
-  getCurrentAllocation,
-} = require("./lib/allocationrules")
+import { getCurrentAllocation,getSuggestedAllocation } from "./allocationRules.js";
 
 function evaluateEmergencyFund(context) {
-const target = context.monthlyIncome * 3
+const target = context.averageMonthlyIncome * 3
+console.log(context.cashHoldings)
+console.log('target',target)
 const progress =
     target === 0
         ? 100
@@ -420,15 +419,22 @@ const cashHoldings = networthItems
          .from("income_entries")
          .select('*')
          .eq('user_id',userId)  
-         const monthlyIncome = incomeEntries
-  .filter(entry => {
+       const totalIncome = (incomeEntries ?? []).reduce(
+  (sum, entry) => sum + Number(entry.amount),
+  0
+)
+
+const uniqueMonths = new Set(
+  (incomeEntries ?? []).map(entry => {
     const d = new Date(entry.date)
-    return (
-      d.getMonth() === prevMonth &&
-      d.getFullYear() === prevYear
-    )
+    return `${d.getFullYear()}-${d.getMonth()}`
   })
-  .reduce((sum, entry) => sum + Number(entry.amount), 0)
+).size
+
+const averageMonthlyIncome =
+  uniqueMonths === 0
+    ? 0
+    : totalIncome / uniqueMonths
 
 
 //Context for every evaluator
@@ -438,7 +444,7 @@ const context = {
   networthItems: networthItems ?? [],
   incomeEntries: incomeEntries ?? [],
   sipPlans: sipPlans ?? [],
-  monthlyIncome,
+  averageMonthlyIncome,
   monthlyInvestments,
   cashHoldings,
   totalAssets,
@@ -488,13 +494,17 @@ const netWorthTask =
 
 if (netWorthTask)
     tasks.push(netWorthTask)
-//console.log(tasks)
+console.log('tasks',tasks)
 await supabaseAdmin
   .from("user_tasks")
   .delete()
   .eq("user_id", userId)
 
-  if (tasks.length > 0) {
+  tasks.sort((a, b) => a.priority - b.priority)
+
+  const topTasks = tasks.slice(0, 3)
+  console.log('top tasks',topTasks)
+  if (topTasks.length > 0) {
   const rows = tasks.map(task => ({
     user_id: userId,
     priority: task.priority,

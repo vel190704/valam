@@ -172,6 +172,7 @@ function mapProfile(row) {
     },
     createdAt:        row.created_at,
     recommendation:   getRecommendation(level, goal),
+    risk_level:row.risk_level,
   };
 }
 
@@ -325,6 +326,25 @@ app.get("/auth/me", requireUser, (req, res) => {
   });
 });
 
+//tasks fetching
+app.get("/tasks", requireUser, async (req, res) => {
+
+    await updateTasks(req.user.id)
+
+    const { data, error } = await supabaseAdmin
+        .from("user_tasks")
+        .select("*")
+        .eq("user_id", req.user.id)
+        .order("priority", { ascending: true })
+
+    if (error)
+        return res.status(500).json({ error: error.message })
+
+    res.json({
+        tasks: data ?? []
+    })
+})
+
 // ── Profile routes ────────────────────────────────────────────────────────────
 
 // BUG FIX 1: was .eq("id", req.user.id) — must be .eq("user_id", req.user.id)
@@ -334,7 +354,6 @@ app.get("/profile", requireUser, async (req, res) => {
     .select("*")
     .eq("user_id", req.user.id)   // ← FIX
     .single();
-    await updateTasks(req.user.id);
   if (error) {
     if (error.code === "PGRST116") {
       return res.status(404).json({ error: "Profile not found" });
@@ -355,9 +374,9 @@ app.get("/profile", requireUser, async (req, res) => {
     .filter(r => NW_LIABILITY_CATS.has(r.category))
     .reduce((s, r) => s + Number(r.amount), 0);
   const computedNetWorth = totalAssets - totalLiabilities;
-  console.log('total assets',totalAssets)
-  console.log('total liabilities',totalLiabilities)
-  console.log(computedNetWorth)
+  //console.log('total assets',totalAssets)
+  //console.log('total liabilities',totalLiabilities)
+ // console.log(computedNetWorth)
   // ── Compute live savings rate and income from FY transactions ──────────────
 const fyStart = getFinancialYearStart();
 
@@ -448,10 +467,10 @@ const liveIncomeKey =
     ? amountToIncomeKey(annualisedIncome)
     : (profile.income ?? "<3L>");
 
-  console.log('live income key',annualisedIncome)
-  console.log('knowledge score',profile.experience)
-  console.log('total investments',profile.totalinvestments)
-  console.log('age',profile.age)
+ ///console.log('live income key',annualisedIncome)
+  //console.log('knowledge score',profile.experience)
+ // console.log('total investments',profile.totalinvestments)
+  //console.log('age',profile.age)
   // ── VALAM recalculation + dual-score ratchet ─────────────────────────────
   let scoreStatus      = "stable";
   let calculatedScore  = profile.valam_score ?? 0;
@@ -471,7 +490,7 @@ const liveIncomeKey =
     });
 
     calculatedScore = fresh.positionScore;
-    console.log(calculatedScore)
+   // console.log(calculatedScore)
    // console.log(calculatedScore)
     const storedCurrent = profile.current_score ?? profile.valam_score ?? 0;
 
@@ -546,6 +565,7 @@ const liveIncomeKey =
     incomeEntries:   incResult.data  ?? [],
     liveSavingsRate,
     monthlySavingsRate,
+    risk_level:profile.risk_level
   });
 });
 
@@ -1268,9 +1288,9 @@ note: note ?? null,
 if (error) return res.status(500).json({ error: error.message })
 
 let next_execution_date = start_date
-console.log('logging in investments table')
-console.log("req.body.mf_type =", req.body.mf_type);
-console.log("mf_type =", mf_type);
+//console.log('logging in investments table')
+//console.log("req.body.mf_type =", req.body.mf_type);
+//console.log("mf_type =", mf_type);
 //console.log("mapped =", SIP_TO_INVESTMENT_MF[mf_type]);
 // If start_date is today or in the past, execute immediately
 if (start_date <= today) {
@@ -1287,9 +1307,9 @@ const { data: invData, error: invError } = await supabaseAdmin
   })
   .select()
 
-console.log("Investment Insert:", invData)
-console.log("Investment Error:", invError)
-console.log('logged in investments table')
+//console.log("Investment Insert:", invData)
+//console.log("Investment Error:", invError)
+//console.log('logged in investments table')
 // Advance to next cycle
 next_execution_date = advanceSipDate(
 start_date, frequency, start_date
@@ -1299,10 +1319,10 @@ await supabaseAdmin
 .update({ next_execution_date })
 .eq('id', sip.id)
 }
-console.log("Returning SIP:", {
+/*console.log("Returning SIP:", {
   ...sip,
   next_execution_date,
-})
+}) */
 res.status(201).json({
 sip: { ...sip,  next_execution_date:
             next_execution_date.toISOString().slice(0, 10) }

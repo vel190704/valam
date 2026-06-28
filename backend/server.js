@@ -8,7 +8,7 @@ import { calculateVALAM } from "./lib/valam.js";
 import { checkAndUnlockMilestones } from "./lib/milestoneEngine.js";
 import { determineNextTask } from "./lib/roadmapEngine.js";
 import { generateCoachingExplanation } from "./lib/aiCoach.js";
-import { getCachedRoadmap, setCachedRoadmap } from "./lib/roadmapCache.js";
+import { getCachedRoadmap, setCachedRoadmap, buildCompositeKey } from "./lib/roadmapCache.js";
 import { getFinancialYearStart } from "./lib/financialYear.js";
 import { Resend } from "resend";
 import { executeDueSIPs,advanceSipDate } from "./lib/sipCron.js";
@@ -1044,6 +1044,233 @@ app.get("/roadmap", requireUser, async (req, res) => {
     });
   }
 });
+
+// ── Roadmap & AI Coaching ─────────────────────────────────────────────────────
+app.get("/roadmap", requireUser, async (req, res) => {
+  try {
+    // 1. Fetch current profile — same query as GET /profile
+    const { data: profileRow, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("*")
+      .eq("user_id", req.user.id)
+      .single();
+
+    if (profileError || !profileRow) {
+      console.error("[GET /roadmap] Profile fetch failed:", profileError?.message);
+      return res.json({
+        task:        null,
+        explanation: "Keep building your financial habits — check back soon for personalized guidance.",
+        source:      "error",
+      });
+    }
+
+    const profile       = mapProfile(profileRow);
+
+    // Compute actual net worth for PDF formula
+    const NW_LIABILITY_CATS_R = new Set(["debt", "emi", "other_liability", "vehicle_loan"]);
+    const nwResultR = await supabaseAdmin
+      .from("networth_items")
+      .select("category, amount")
+      .eq("user_id", req.user.id);
+    const totalAssetsR = (nwResultR.data ?? [])
+      .filter(r => !NW_LIABILITY_CATS_R.has(r.category))
+      .reduce((s, r) => s + Number(r.amount), 0);
+    const totalLiabilitiesR = (nwResultR.data ?? [])
+      .filter(r => NW_LIABILITY_CATS_R.has(r.category))
+      .reduce((s, r) => s + Number(r.amount), 0);
+    const roadmapNetWorth = totalAssetsR - totalLiabilitiesR;
+
+    // ── Compute live savings rate and income from FY transactions ──────────
+    const fyStartR  = getFinancialYearStart();
+    const fyDateR   = new Date(fyStartR);
+    const nowDateR  = new Date();
+    const monthsElapsedR = Math.max(1,
+      (nowDateR.getFullYear() - fyDateR.getFullYear()) * 12 +
+      (nowDateR.getMonth() - fyDateR.getMonth()) + 1
+    );
+    const [liveInvResultR, liveIncResultR] = await Promise.all([
+      supabaseAdmin.from('investments').select('amount').eq('user_id', req.user.id).gte('date', fyStartR),
+      supabaseAdmin.from('income_entries').select('amount').eq('user_id', req.user.id).gte('date', fyStartR),
+    ]);
+    const totalInvestedFYR  = (liveInvResultR.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
+    const totalIncomeFYR    = (liveIncResultR.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
+    const liveSavingsRateR  = totalIncomeFYR > 0 ? (totalInvestedFYR / totalIncomeFYR) * 100 : 0;
+    const annualisedIncomeR = (totalIncomeFYR / monthsElapsedR) * 12;
+
+    const liveSavingsKeyR = totalIncomeFYR > 0
+      ? rateToSavingsKey(liveSavingsRateR)
+      : (profileRow.savings_rate ?? '<2');
+    const liveIncomeKeyR = totalIncomeFYR > 0
+      ? amountToIncomeKey(annualisedIncomeR)
+      : (profileRow.income ?? '<3L');
+
+    // Compute fresh factor scores from live savings/income + stored profile fields
+    let freshFactorScores = null;
+    if (profileRow.investments && profileRow.experience && profileRow.age) {
+      const fresh = calculateVALAM({
+        age:             Number(profileRow.age),
+        income:          liveIncomeKeyR,
+        savingsRate:     liveSavingsKeyR,
+        investments:     profileRow.investments,
+        experience:      profileRow.experience,
+        netWorth:        roadmapNetWorth,
+        emergencyFund:   profileRow.emergency_fund    ?? null,
+        highInterestDebt: profileRow.high_interest_debt ?? null,
+        healthInsurance: profileRow.health_insurance  ?? null,
+      });
+      freshFactorScores = {
+        nw:              fresh.breakdown.netWorthScore,
+        wv:              fresh.breakdown.wealthVelocityScore,
+        sav:             fresh.breakdown.savingsScore,
+        inc:             fresh.breakdown.incomeScore,
+        exp:             fresh.breakdown.experienceScore,
+        fh:              fresh.breakdown.financialHealthScore,
+        emergencyFund:   profileRow.emergency_fund    ?? null,
+        highInterestDebt: profileRow.high_interest_debt ?? null,
+        healthInsurance: profileRow.health_insurance  ?? null,
+      };
+    }
+
+    // ── Build liveContext for the new task engine ─────────────────────────────
+    // Total investments from the DB
+    const { data: allInv } = await supabaseAdmin
+      .from('investments')
+      .select('type, amount, mfType, date')
+      .eq('user_id', req.user.id)
+
+    const invList2 = allInv ?? []
+    const totalInvestments = invList2.reduce((s, i) => s + Number(i.amount), 0)
+
+    // Has a SIP-tagged investment in last 60 days?
+    const sixtyDaysAgo = new Date()
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
+    const cutoff = sixtyDaysAgo.toISOString().split('T')[0]
+    const hasRecentSIP = invList2.some(i =>
+      i.date >= cutoff && (i.note?.includes('[SIP]') || false)
+    )
+
+    // Asset allocation percentages
+    const EQUITY_TYPES2 = new Set(['mf', 'etf', 'stock', 'crypto'])
+    const DEBT_TYPES2   = new Set(['fd', 'bond'])
+    let eqAmt = 0, dtAmt = 0, goldAmt = 0
+    for (const inv of invList2) {
+      const amt = Number(inv.amount)
+      if (EQUITY_TYPES2.has(inv.type)) eqAmt += amt
+      else if (DEBT_TYPES2.has(inv.type)) dtAmt += amt
+      else goldAmt += amt
+    }
+    const invTotal2 = eqAmt + dtAmt + goldAmt || 1
+    const equityPct = Math.round(eqAmt    / invTotal2 * 100)
+    const debtPct2  = Math.round(dtAmt    / invTotal2 * 100)
+    const goldPct2  = Math.round(goldAmt  / invTotal2 * 100)
+
+    // Monthly income from live savings calculation
+    const monthlyIncome = totalIncomeFYR > 0
+      ? Math.round(totalIncomeFYR / 12)
+      : 0
+
+    // hasActiveSIP — real sip_plans check
+    const { data: activeSips } = await supabaseAdmin
+      .from('sip_plans')
+      .select('id')
+      .eq('user_id', req.user.id)
+      .eq('status', 'active')
+      .limit(1)
+    const hasActiveSIP = (activeSips ?? []).length > 0
+
+    // Emergency fund coverage (nwResultR already fetched above)
+    const cashAndEmergency = (nwResultR.data ?? [])
+      .filter(r => ['cash', 'emergency', 'savings'].includes(r.category))
+      .reduce((s, r) => s + Number(r.amount), 0)
+    const emergencyFundTarget = monthlyIncome > 0 ? monthlyIncome * 6 : 0
+    const emergencyMonthsCovered = emergencyFundTarget > 0
+      ? Math.round((cashAndEmergency / emergencyFundTarget) * 6 * 10) / 10
+      : 0
+
+    // Learning progress count
+    const { data: completedLearning } = await supabaseAdmin
+      .from('learning_progress')
+      .select('id')
+      .eq('user_id', req.user.id)
+      .eq('status', 'completed')
+    const completedTopics = (completedLearning ?? []).length
+
+    // User goal
+    const userGoal = profileRow.goal ?? profileRow.primary_goal ?? 'wealth'
+
+    const liveContext = {
+      totalInvestments,
+      monthlySavingsRate: liveSavingsRateR ?? null,
+      monthlyIncome,
+      hasRecentSIP,
+      hasActiveSIP,
+      emergencyMonthsCovered,
+      emergencyFundTarget,
+      completedTopics,
+      userGoal,
+      netWorth:    roadmapNetWorth ?? 0,
+      equityPct,
+      goldPct:     goldPct2,
+      debtPct:     debtPct2,
+      experienceKey: profileRow.experience ?? 'beginner',
+    }
+
+    // learningLevel: experienceScore / 2 → beginner=2→1, learning=4→2, intermediate=6→3, advanced=8→4
+    const learningLevel = Math.max(1, Math.min(4, profile.breakdown.experienceScore / 2));
+
+    // 2. Check cache
+    const cacheKey = buildCompositeKey(profile.valamScore, totalInvestments, liveSavingsRateR)
+    const cached = await getCachedRoadmap(supabaseAdmin, req.user.id);
+
+    // 3. Cache hit: composite key unchanged → return cached explanation, skip Groq entirely
+    //    Still call determineNextTask() (cheap deterministic math) to reconstruct
+    //    the full task/progress object for the response.
+    if (cached && cached.scoreSnapshot === cacheKey) {
+      const roadmapResult = determineNextTask(profile, learningLevel, freshFactorScores, liveContext);
+      return res.json({
+        task:        roadmapResult,
+        tasks:       roadmapResult.tasks,
+        explanation: cached.explanation,
+        source:      "cache",
+      });
+    }
+
+    // 4. Cache miss: score changed or first visit — call full pipeline
+    const roadmapResult = determineNextTask(profile, learningLevel, freshFactorScores, liveContext);
+
+    const firstName = (profile.name ?? "").split(" ")[0].trim() || "";
+    const { explanation, source } = await generateCoachingExplanation(groq, roadmapResult, firstName, liveContext);
+
+    // Persist the new cache entry (await so it's ready for the immediate next request)
+    try {
+      await setCachedRoadmap(
+        supabaseAdmin,
+        req.user.id,
+        explanation,
+        roadmapResult.task.taskType,
+        cacheKey,
+      );
+    } catch (cacheErr) {
+      console.error("[GET /roadmap] Cache write failed (non-fatal):", cacheErr.message);
+    }
+
+    return res.json({
+      task:        roadmapResult,
+      tasks:       roadmapResult.tasks,
+      explanation,
+      source,
+    });
+  } catch (err) {
+    console.error("[GET /roadmap] Unexpected error:", err.message);
+    return res.json({
+      task:        null,
+      explanation: "Keep building your financial habits — check back soon for personalized guidance.",
+      source:      "error",
+    });
+  }
+});
+
+
 
 // ── Learning Hub ─────────────────────────────────────────────────────────────
 const LEVEL_NAMES = ['Seed', 'Explorer', 'Builder', 'Accelerator', 'Achiever', 'Wealth Creator', 'Wealth Architect', 'Legend'];

@@ -21,6 +21,8 @@ export default function Navbar() {
     '/auth',
     '/allocation',
     '/learning',
+    '/calculators',
+    '/knowledge-hub',
   ]
 
   const hiddenPage = appPages.some(

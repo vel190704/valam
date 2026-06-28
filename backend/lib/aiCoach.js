@@ -104,7 +104,7 @@ function getFallback(taskType) {
  * @param {string}                 [userFirstName] - User's first name; '' or undefined → "you"
  * @returns {Promise<{ explanation: string, source: 'llm' | 'fallback' }>}
  */
-export async function generateCoachingExplanation(groqClient, roadmapResult, userFirstName) {
+export async function generateCoachingExplanation(groqClient, roadmapResult, userFirstName, liveContext = {}) {
   const { task, currentLevelName, nextLevelName, progressToNextLevel } = roadmapResult
   const firstName = (userFirstName ?? '').trim()
   const taskType  = task?.taskType ?? '_default'
@@ -135,13 +135,56 @@ RULES — follow ALL of these with no exceptions:
 6. ${nameRule}`
 
   // ── User turn ─────────────────────────────────────────────────────────────
-  const nextLabel    = nextLevelName ?? 'Legend (highest level)'
-  const userContent  = `User's current VALAM level: ${currentLevelName}. Progress to next level (${nextLabel}): ${progressToNextLevel}%. Task to focus on: "${task?.title ?? 'Build your financial habits'}". Allocation discussion allowed: ${task?.allowAllocationDiscussion ?? false}.`
+  const nextLabel = nextLevelName ?? 'Legend (highest level)'
+
+  // Build a data-rich user context for Groq
+  const ctx = liveContext
+  const savingsRateStr = ctx.monthlySavingsRate != null
+    ? `${Math.round(ctx.monthlySavingsRate)}%`
+    : 'unknown'
+  const investedStr = ctx.totalInvestments > 0
+    ? (ctx.totalInvestments >= 100000
+        ? `₹${(ctx.totalInvestments / 100000).toFixed(1)}L`
+        : `₹${Math.round(ctx.totalInvestments / 1000)}K`)
+    : '₹0 (no investments yet)'
+  const nwStr = ctx.netWorth > 0
+    ? (ctx.netWorth >= 100000
+        ? `₹${(ctx.netWorth / 100000).toFixed(1)}L`
+        : `₹${Math.round(ctx.netWorth / 1000)}K`)
+    : '₹0'
+  const incomeStr = ctx.monthlyIncome > 0
+    ? `₹${Math.round(ctx.monthlyIncome / 1000)}K/month`
+    : 'not logged yet'
+  const allocStr = ctx.totalInvestments > 0
+    ? `Equity ${ctx.equityPct ?? 0}% · Debt ${ctx.debtPct ?? 0}% · Gold ${ctx.goldPct ?? 0}%`
+    : 'no portfolio yet'
+
+  const userContent = `User profile:
+- Name: ${firstName || 'the user'}
+- VALAM Level: ${currentLevelName} (Level ${roadmapResult.currentLevel})
+- Progress to ${nextLabel}: ${progressToNextLevel}%
+- Monthly income: ${incomeStr}
+- Current savings rate: ${savingsRateStr}
+- Total invested: ${investedStr}
+- Net worth: ${nwStr}
+- Portfolio allocation: ${allocStr}
+- Has active SIP: ${ctx.hasRecentSIP ? 'Yes' : 'No'}
+- Emergency fund: ${ctx.emergencyMonthsCovered > 0 ? `${ctx.emergencyMonthsCovered} months covered (target ${ctx.emergencyFundTarget > 0 ? '₹' + Math.round(ctx.emergencyFundTarget/1000) + 'K' : 'unknown'})` : 'none yet'}
+- Financial goal: ${ctx.userGoal ?? 'wealth building'}
+- Learning topics completed: ${ctx.completedTopics ?? 0}
+- Experience: ${ctx.experienceKey ?? 'beginner'}
+
+Task to focus on: "${task?.title ?? 'Build your financial habits'}"
+Allocation discussion allowed: ${task?.allowAllocationDiscussion ?? false}
+
+Write 2–3 sentences coaching this specific user on why THIS task matters for THEIR situation.
+Reference their actual numbers (savings rate, invested amount, net worth) where relevant.
+Be encouraging but specific — no generic platitudes.`
 
   // ── Groq call with full error handling ───────────────────────────────────
   try {
     const response = await groqClient.chat.completions.create({
-      model:      'openai/gpt-oss-120b',
+      model:      'llama-3.3-70b-versatile',
       max_tokens: 1024,
       messages: [
         { role: 'system', content: systemPrompt },

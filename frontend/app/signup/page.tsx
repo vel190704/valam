@@ -21,7 +21,7 @@ interface AssessmentPayload {
   //potentialScore: number
   potentialLevel: number
   potentialLevelName: string
-  wealthVelocity: number
+  //wealthVelocity: number
   breakdown: {
     savingsScore: number
     investmentsScore: number
@@ -63,7 +63,7 @@ function getPendingAssessment(
       //potentialScore:     parsed.potentialScore,
       potentialLevel:     parsed.potentialLevel,
       potentialLevelName: parsed.potentialLevelName,
-      wealthVelocity:     parsed.breakdown?.wealthVelocity ?? 0,
+      //wealthVelocity:     parsed.breakdown?.wealthVelocity ?? 0,
       breakdown: {
         savingsScore:     parsed.breakdown?.savingsScore        ?? 0,
         investmentsScore: parsed.breakdown?.investmentVelocityScore ?? 0,

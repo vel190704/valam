@@ -1,0 +1,6 @@
+1:"$Sreact.fragment"
+2:I[92654,["/_next/static/chunks/0ck4zyvv8dp9k.js","/_next/static/chunks/2fhy100cvaaal.js","/_next/static/chunks/04m_h7c5p3yer.js","/_next/static/chunks/3rb8z0nkehijd.js"],"default"]
+3:I[22473,["/_next/static/chunks/0ck4zyvv8dp9k.js","/_next/static/chunks/2fhy100cvaaal.js","/_next/static/chunks/04m_h7c5p3yer.js"],"OutletBoundary"]
+4:"$Sreact.suspense"
+0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"eyebrow":"About Valam","title":"A guided path for everyday wealth decisions.","body":"Valam helps people understand where they stand financially and what practical step comes next.","points":["Simple assessment flow for income, savings, investments, and experience.","A VALAM level that turns scattered financial inputs into a clear stage.","Roadmaps designed around Indian investment habits and goals.","A dashboard that keeps your profile and recommendations in one place."]}],[["$","script","script-0",{"src":"/_next/static/chunks/3rb8z0nkehijd.js","async":true}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"rTgG3A-L6qWrb9yPZdkk3"}
+5:null

@@ -1,0 +1,6 @@
+1:"$Sreact.fragment"
+2:I[92654,["/_next/static/chunks/0ck4zyvv8dp9k.js","/_next/static/chunks/2fhy100cvaaal.js","/_next/static/chunks/04m_h7c5p3yer.js","/_next/static/chunks/3rb8z0nkehijd.js"],"default"]
+3:I[22473,["/_next/static/chunks/0ck4zyvv8dp9k.js","/_next/static/chunks/2fhy100cvaaal.js","/_next/static/chunks/04m_h7c5p3yer.js"],"OutletBoundary"]
+4:"$Sreact.suspense"
+0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"eyebrow":"Vision","title":"Make investing feel understandable, personal, and doable.","body":"The vision is to help more people move from financial confusion to confident, consistent action.","points":["Personalized guidance without overwhelming jargon.","Progressive levels that make long-term wealth building easier to follow.","Education-first recommendations for safer financial decisions.","A product that grows from assessment into an ongoing money companion."]}],[["$","script","script-0",{"src":"/_next/static/chunks/3rb8z0nkehijd.js","async":true}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"rTgG3A-L6qWrb9yPZdkk3"}
+5:null

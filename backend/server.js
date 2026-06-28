@@ -23,7 +23,8 @@ app.use(cors({
   origin: [
     process.env.FRONTEND_ORIGIN,
     "http://localhost:3000",
-    "http://192.168.29.174:3000"
+    "http://192.168.29.174:3000",
+    "https://valamhq.web.app"
   ]
 }));
 app.use(express.json());
@@ -1641,4 +1642,6 @@ const PORT = process.env.PORT ?? 5000;
 app.listen(PORT, () => {
   console.log(`✅ VALAM backend running on port ${PORT}`);
 });
+
+export default app;
 

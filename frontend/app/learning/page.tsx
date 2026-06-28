@@ -409,7 +409,8 @@ export default function LearningHubPage() {
                             return (
                               <div
                                 key={topicName}
-                                onClick={() => router.push(`/learning/${ld.level}/${topicIdx}`)}
+                               onClick={() =>
+                                router.push(`/learning/level?level=${ld.level}&topic?topic=${topicIdx}`)}
                                 style={{
                                   background: 'var(--surface2)',
                                   border: `1px solid ${status === 'completed' ? 'rgba(99,153,34,0.3)' : status === 'continue' ? 'rgba(184,146,74,0.4)' : 'var(--border)'}`,

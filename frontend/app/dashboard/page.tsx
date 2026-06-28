@@ -831,7 +831,7 @@ export default function DashboardPage() {
                 </div>
               )
             })}
-            <Link href={`/learning/${currentLevel}`}
+            <Link href={`/learning/level?level=${currentLevel}`}
               style={{
                 marginTop: 12, display: 'inline-block', fontSize: 9,
                 color: 'var(--gold)', fontWeight: 600, letterSpacing: '.3px',

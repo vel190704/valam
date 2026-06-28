@@ -11,7 +11,7 @@ import { generateCoachingExplanation } from "./lib/aiCoach.js";
 import { getCachedRoadmap, setCachedRoadmap, buildCompositeKey } from "./lib/roadmapCache.js";
 import { getFinancialYearStart } from "./lib/financialYear.js";
 import { Resend } from "resend";
-import { executeDueSIPs,advanceSipDate } from "./lib/sipCron.js";
+import { executeDueSIPs, advanceSipDate } from "./lib/sipCron.js";
 
 dotenv.config();
 dotenv.config({ path: ".env.local" });           // loads GROQ_API_KEY from backend/.env.local
@@ -21,9 +21,13 @@ const app = express();
 app.use(cors({
   origin: [
     process.env.FRONTEND_ORIGIN,
+    "https://valam-tau.vercel.app",
     "http://localhost:3000",
-    "http://192.168.29.174:3000"
-  ]
+    "http://192.168.29.174:3000",
+  ],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 }));
 app.use(express.json());
 
@@ -50,7 +54,7 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
 });
 
 // Groq client — initialized once at startup, shared across all /roadmap requests
-const groq   = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -104,31 +108,31 @@ function rateToSavingsKey(rate) {
   if (rate >= 20) return '20-30'
   if (rate >= 15) return '15-20'
   if (rate >= 10) return '10-15'
-  if (rate >= 5)  return '5-10'
-  if (rate >= 2)  return '2-5'
+  if (rate >= 5) return '5-10'
+  if (rate >= 2) return '2-5'
   return '<2'
 }
 
 function amountToIncomeKey(annual) {
-  if (annual >= 5000000)  return '50L+'
-  if (annual >= 3000000)  return '30L-50L'
-  if (annual >= 2000000)  return '20L-30L'
-  if (annual >= 1200000)  return '12L-20L'
-  if (annual >= 800000)   return '8L-12L'
-  if (annual >= 500000)   return '5L-8L'
-  if (annual >= 300000)   return '3L-5L'
+  if (annual >= 5000000) return '50L+'
+  if (annual >= 3000000) return '30L-50L'
+  if (annual >= 2000000) return '20L-30L'
+  if (annual >= 1200000) return '12L-20L'
+  if (annual >= 800000) return '8L-12L'
+  if (annual >= 500000) return '5L-8L'
+  if (annual >= 300000) return '3L-5L'
   return '<3L'
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getRecommendation(level, goal) {
   const goalLabel =
-    goal === "retirement"   ? "retirement" :
-    goal === "emergency"    ? "emergency fund" :
-    goal === "business"     ? "business capital" :
-    goal === "education"    ? "education fund" :
-    goal === "home"         ? "home fund" :
-                              "wealth";
+    goal === "retirement" ? "retirement" :
+      goal === "emergency" ? "emergency fund" :
+        goal === "business" ? "business capital" :
+          goal === "education" ? "education fund" :
+            goal === "home" ? "home fund" :
+              "wealth";
 
   return {
     headline: `Build your ${goalLabel} plan from Level ${level}`,
@@ -150,37 +154,37 @@ function getRecommendation(level, goal) {
 // BUG FIX 3: added v3 fields — potential_score, potential_level,
 //            potential_level_name, wealth_velocity
 function mapProfile(row) {
-  const goal   = VALID_GOALS.includes(row.goal) ? row.goal : "wealth";
-  const level  = row.valam_level ?? 1;
+  const goal = VALID_GOALS.includes(row.goal) ? row.goal : "wealth";
+  const level = row.valam_level ?? 1;
 
   return {
-    id:               row.id,
-    userId:           row.user_id,
-    name:             row.name ?? "",
-    age:              row.age ?? 0,
-    income:           row.income ?? "",
-    savingsRate:      row.savings_rate ?? "",
-    investments:      row.investments ?? "",
-    experience:       row.experience ?? "",
+    id: row.id,
+    userId: row.user_id,
+    name: row.name ?? "",
+    age: row.age ?? 0,
+    income: row.income ?? "",
+    savingsRate: row.savings_rate ?? "",
+    investments: row.investments ?? "",
+    experience: row.experience ?? "",
     goal,
-    valamScore:       row.valam_score ?? 0,
-    valamLevel:       level,
-    valamLevelName:   row.valam_level_name ?? "",
+    valamScore: row.valam_score ?? 0,
+    valamLevel: level,
+    valamLevelName: row.valam_level_name ?? "",
     // v3 fields
-    potentialScore:      row.potential_score ?? 0,
-    potentialLevel:      row.potential_level ?? 0,
-    potentialLevelName:  row.potential_level_name ?? "",
-    wealthVelocity:      row.wealth_velocity ?? 0,
-    onboarded:        row.onboarded ?? false,
+    potentialScore: row.potential_score ?? 0,
+    potentialLevel: row.potential_level ?? 0,
+    potentialLevelName: row.potential_level_name ?? "",
+    wealthVelocity: row.wealth_velocity ?? 0,
+    onboarded: row.onboarded ?? false,
     breakdown: {
-      savingsScore:     row.savings_score ?? 0,
+      savingsScore: row.savings_score ?? 0,
       investmentsScore: row.investments_score ?? 0,
-      incomeScore:      row.income_score ?? 0,
-      experienceScore:  row.experience_score ?? 0,
-      ageScore:         row.age_score ?? 0,
+      incomeScore: row.income_score ?? 0,
+      experienceScore: row.experience_score ?? 0,
+      ageScore: row.age_score ?? 0,
     },
-    createdAt:        row.created_at,
-    recommendation:   getRecommendation(level, goal),
+    createdAt: row.created_at,
+    recommendation: getRecommendation(level, goal),
   };
 }
 
@@ -189,31 +193,31 @@ function mapProfile(row) {
 //            potential_level_name, wealth_velocity
 function assessmentToProfile(userId, body, onboarded) {
   return {
-    user_id:              userId,
-    name:                 body.name,
-    age:                  body.age,
-    income:               body.income,
-    savings_rate:         body.savingsRate,
-    investments:          body.investments,
-    experience:           body.experience,
-    goal:                 body.goal ?? "wealth",
-    valam_score:          body.valamScore,
-    valam_level:          body.valamLevel,
-    valam_level_name:     body.valamLevelName,
+    user_id: userId,
+    name: body.name,
+    age: body.age,
+    income: body.income,
+    savings_rate: body.savingsRate,
+    investments: body.investments,
+    experience: body.experience,
+    goal: body.goal ?? "wealth",
+    valam_score: body.valamScore,
+    valam_level: body.valamLevel,
+    valam_level_name: body.valamLevelName,
     // v3 potential fields
-    potential_score:      body.potentialScore      ?? null,
-    potential_level:      body.potentialLevel      ?? null,
-    potential_level_name: body.potentialLevelName  ?? null,
-    wealth_velocity:      body.wealthVelocity      ?? null,
-    savings_score:          body.breakdown?.savingsScore          ?? null,
-    investments_score:      body.breakdown?.investmentsScore      ?? null,
-    income_score:           body.breakdown?.incomeScore           ?? null,
-    experience_score:       body.breakdown?.experienceScore       ?? null,
-    age_score:              body.breakdown?.ageScore              ?? null,
-    emergency_fund:         body.emergencyFund                    ?? null,
-    high_interest_debt:     body.highInterestDebt                 ?? null,
-    health_insurance:       body.healthInsurance                  ?? null,
-    financial_health_score: body.breakdown?.financialHealthScore  ?? null,
+    potential_score: body.potentialScore ?? null,
+    potential_level: body.potentialLevel ?? null,
+    potential_level_name: body.potentialLevelName ?? null,
+    wealth_velocity: body.wealthVelocity ?? null,
+    savings_score: body.breakdown?.savingsScore ?? null,
+    investments_score: body.breakdown?.investmentsScore ?? null,
+    income_score: body.breakdown?.incomeScore ?? null,
+    experience_score: body.breakdown?.experienceScore ?? null,
+    age_score: body.breakdown?.ageScore ?? null,
+    emergency_fund: body.emergencyFund ?? null,
+    high_interest_debt: body.highInterestDebt ?? null,
+    health_insurance: body.healthInsurance ?? null,
+    financial_health_score: body.breakdown?.financialHealthScore ?? null,
     onboarded,
   };
 }
@@ -221,7 +225,7 @@ function assessmentToProfile(userId, body, onboarded) {
 // ── Auth middleware ───────────────────────────────────────────────────────────
 async function requireUser(req, res, next) {
   const header = req.headers.authorization;
-  const token  = header?.startsWith("Bearer ") ? header.slice(7) : null;
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
 
   if (!token) {
     return res.status(401).json({ error: "Missing authorization token" });
@@ -233,13 +237,13 @@ async function requireUser(req, res, next) {
     return res.status(401).json({ error: "Invalid authorization token" });
   }
 
-  req.user  = user;
+  req.user = user;
   req.token = token;
   return next();
 }
 
 async function processDueSips(userId) {
- await executeDueSIPs(supabaseAdmin);
+  await executeDueSIPs(supabaseAdmin);
 }
 
 // ── Health check ──────────────────────────────────────────────────────────────
@@ -315,10 +319,10 @@ app.post("/auth/login", async (req, res) => {
   return res.json({
     accessToken: data.session.access_token,
     user: {
-      id:    data.user.id,
+      id: data.user.id,
       email: data.user.email,
-      name:  data.user.user_metadata?.name ?? "",
-      age:   Number(data.user.user_metadata?.age ?? 0),
+      name: data.user.user_metadata?.name ?? "",
+      age: Number(data.user.user_metadata?.age ?? 0),
     },
   });
 });
@@ -326,10 +330,10 @@ app.post("/auth/login", async (req, res) => {
 app.get("/auth/me", requireUser, (req, res) => {
   res.json({
     user: {
-      id:    req.user.id,
+      id: req.user.id,
       email: req.user.email,
-      name:  req.user.user_metadata?.name ?? "",
-      age:   Number(req.user.user_metadata?.age ?? 0),
+      name: req.user.user_metadata?.name ?? "",
+      age: Number(req.user.user_metadata?.age ?? 0),
     },
   });
 });
@@ -364,10 +368,10 @@ app.get("/profile", requireUser, async (req, res) => {
     .filter(r => NW_LIABILITY_CATS.has(r.category))
     .reduce((s, r) => s + Number(r.amount), 0);
   const computedNetWorth = totalAssets - totalLiabilities;
- // console.log(computedNetWorth)
+  // console.log(computedNetWorth)
   // ── Compute live savings rate and income from FY transactions ──────────────
   const fyStart = getFinancialYearStart();
-  const fyDate  = new Date(fyStart);
+  const fyDate = new Date(fyStart);
   const nowDate = new Date();
   const monthsElapsed = Math.max(1,
     (nowDate.getFullYear() - fyDate.getFullYear()) * 12 +
@@ -377,10 +381,10 @@ app.get("/profile", requireUser, async (req, res) => {
     supabaseAdmin.from('investments').select('amount').eq('user_id', req.user.id).gte('date', fyStart),
     supabaseAdmin.from('income_entries').select('amount').eq('user_id', req.user.id).gte('date', fyStart),
   ]);
-  const totalInvestedFY    = (liveInvResult.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
-  const totalIncomeFY      = (liveIncResult.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
-  const fyLiveSavingsRate  = totalIncomeFY > 0 ? (totalInvestedFY / totalIncomeFY) * 100 : 0;
-  const annualisedIncome   = (totalIncomeFY / Math.max(1, monthsElapsed)) * 12;
+  const totalInvestedFY = (liveInvResult.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
+  const totalIncomeFY = (liveIncResult.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
+  const fyLiveSavingsRate = totalIncomeFY > 0 ? (totalInvestedFY / totalIncomeFY) * 100 : 0;
+  const annualisedIncome = (totalIncomeFY / Math.max(1, monthsElapsed)) * 12;
 
   const liveSavingsKey = totalIncomeFY > 0
     ? rateToSavingsKey(fyLiveSavingsRate)
@@ -390,61 +394,61 @@ app.get("/profile", requireUser, async (req, res) => {
     : (profile.income ?? '<3L');
 
   // ── VALAM recalculation + dual-score ratchet ─────────────────────────────
-  let scoreStatus      = "stable";
-  let calculatedScore  = profile.valam_score ?? 0;
-  let currentScore     = profile.current_score ?? profile.valam_score ?? 0;
+  let scoreStatus = "stable";
+  let calculatedScore = profile.valam_score ?? 0;
+  let currentScore = profile.current_score ?? profile.valam_score ?? 0;
 
   if (profile.investments && profile.experience && profile.age) {
     const fresh = calculateVALAM({
-      age:             Number(profile.age),
-      income:          liveIncomeKey,
-      savingsRate:     liveSavingsKey,
-      investments:     profile.totalinvestments,
-      experience:      profile.experience,
-      netWorth:        computedNetWorth,
-      emergencyFund:   profile.emergency_fund    ?? null,
+      age: Number(profile.age),
+      income: liveIncomeKey,
+      savingsRate: liveSavingsKey,
+      investments: profile.totalinvestments,
+      experience: profile.experience,
+      netWorth: computedNetWorth,
+      emergencyFund: profile.emergency_fund ?? null,
       highInterestDebt: profile.high_interest_debt ?? null,
-      healthInsurance: profile.health_insurance  ?? null,
+      healthInsurance: profile.health_insurance ?? null,
     });
 
     calculatedScore = fresh.positionScore;
-   // console.log(calculatedScore)
+    // console.log(calculatedScore)
     const storedCurrent = profile.current_score ?? profile.valam_score ?? 0;
 
     if (fresh.positionScore > storedCurrent) {
       // Promotion: calculated beats stored high-water mark — ratchet up
-      scoreStatus  = "promotion";
+      scoreStatus = "promotion";
       currentScore = fresh.positionScore;
       await supabaseAdmin
         .from("profiles")
         .update({
-          calculated_score:       fresh.positionScore,
-          current_score:          fresh.positionScore,
-          valam_score:            fresh.positionScore,
-          valam_level:            fresh.positionLevel,
-          valam_level_name:       fresh.positionLevelName,
+          calculated_score: fresh.positionScore,
+          current_score: fresh.positionScore,
+          valam_score: fresh.positionScore,
+          valam_level: fresh.positionLevel,
+          valam_level_name: fresh.positionLevelName,
           financial_health_score: fresh.breakdown.financialHealthScore,
         })
         .eq("user_id", req.user.id);
     } else if (fresh.positionScore < storedCurrent) {
       // Regression: calculated dipped below high-water mark — store calc only
-      scoreStatus  = "regression";
+      scoreStatus = "regression";
       currentScore = storedCurrent;
       await supabaseAdmin
         .from("profiles")
         .update({
-          calculated_score:       fresh.positionScore,
+          calculated_score: fresh.positionScore,
           financial_health_score: fresh.breakdown.financialHealthScore,
         })
         .eq("user_id", req.user.id);
     } else {
       // Stable: no change
-      scoreStatus  = "stable";
+      scoreStatus = "stable";
       currentScore = storedCurrent;
       await supabaseAdmin
         .from("profiles")
         .update({
-          calculated_score:       fresh.positionScore,
+          calculated_score: fresh.positionScore,
           financial_health_score: fresh.breakdown.financialHealthScore,
         })
         .eq("user_id", req.user.id);
@@ -469,17 +473,17 @@ app.get("/profile", requireUser, async (req, res) => {
       .order("date", { ascending: false }),
   ]);
 
-  const liveSavingsRate     = await calculateLiveSavingsRate(supabaseAdmin, req.user.id);
-  const monthlySavingsRate  = await calculateMonthlySavingsRate(supabaseAdmin, req.user.id);
+  const liveSavingsRate = await calculateLiveSavingsRate(supabaseAdmin, req.user.id);
+  const monthlySavingsRate = await calculateMonthlySavingsRate(supabaseAdmin, req.user.id);
 
   return res.json({
-    profile:         mapProfile(profile),
+    profile: mapProfile(profile),
     scoreStatus,
     calculatedScore,
     currentScore,
-    investments:     invResult.data  ?? [],
-    networthItems:   nwResult.data   ?? [],
-    incomeEntries:   incResult.data  ?? [],
+    investments: invResult.data ?? [],
+    networthItems: nwResult.data ?? [],
+    incomeEntries: incResult.data ?? [],
     liveSavingsRate,
     monthlySavingsRate,
   });
@@ -503,7 +507,7 @@ app.patch('/profile/risk', requireUser, async (req, res) => {
 
 app.post("/profile/ensure", requireUser, async (req, res) => {
   const name = req.body.name ?? req.user.user_metadata?.name ?? "";
-  const age  = Number(req.body.age ?? req.user.user_metadata?.age ?? 0);
+  const age = Number(req.body.age ?? req.user.user_metadata?.age ?? 0);
 
   // BUG FIX 2: onConflict: "user_id"
   const { data, error } = await supabaseAdmin
@@ -581,7 +585,7 @@ app.post('/profile/inv', requireUser, async (req, res) => {
 // ── Recommendations ───────────────────────────────────────────────────────────
 app.get("/recommendations", (req, res) => {
   const level = parseInt(req.query.level, 10);
-  const goal  = String(req.query.goal ?? "wealth");
+  const goal = String(req.query.goal ?? "wealth");
 
   if (Number.isNaN(level) || level < 1 || level > 8) {
     return res.status(400).json({ error: "Invalid level: must be 1–8" });
@@ -612,7 +616,7 @@ app.get("/investments", requireUser, async (req, res) => {
 })
 
 app.post("/investments", requireUser, async (req, res) => {
-  const { date, type, amount,mfType, note } = req.body;
+  const { date, type, amount, mfType, note } = req.body;
 
   if (!type || amount == null) {
     return res.status(400).json({ error: "Missing required fields: type, amount" });
@@ -624,15 +628,15 @@ app.post("/investments", requireUser, async (req, res) => {
     });
   }
   if (
-  type === "mf" &&
-  (!mfType ||
-   !VALID_MF_TYPES.includes(mfType))
-) {
-  return res.status(400).json({
-    error:
-      `Invalid mfType. Must be one of: ${VALID_MF_TYPES.join(", ")}`
-  })
-}
+    type === "mf" &&
+    (!mfType ||
+      !VALID_MF_TYPES.includes(mfType))
+  ) {
+    return res.status(400).json({
+      error:
+        `Invalid mfType. Must be one of: ${VALID_MF_TYPES.join(", ")}`
+    })
+  }
 
   const { data, error } = await supabaseAdmin
     .from("investments")
@@ -640,7 +644,7 @@ app.post("/investments", requireUser, async (req, res) => {
       user_id: req.user.id,
       date: date ?? null,
       type,
-      mfType: type === "mf"  ?  mfType  :null,
+      mfType: type === "mf" ? mfType : null,
       amount: Number(amount),
       note: note ?? null,
     })
@@ -809,7 +813,7 @@ app.get("/milestones", requireUser, async (req, res) => {
   const unlockedMap = new Map((unlocked ?? []).map(u => [u.milestone_id, u.unlocked_at]));
   const result = (all ?? []).map(m => ({
     ...m,
-    unlocked:    unlockedMap.has(m.id),
+    unlocked: unlockedMap.has(m.id),
     unlocked_at: unlockedMap.get(m.id) ?? null,
   }));
 
@@ -829,13 +833,13 @@ app.get("/roadmap", requireUser, async (req, res) => {
     if (profileError || !profileRow) {
       console.error("[GET /roadmap] Profile fetch failed:", profileError?.message);
       return res.json({
-        task:        null,
+        task: null,
         explanation: "Keep building your financial habits — check back soon for personalized guidance.",
-        source:      "error",
+        source: "error",
       });
     }
 
-    const profile       = mapProfile(profileRow);
+    const profile = mapProfile(profileRow);
 
     // Compute actual net worth for PDF formula
     const NW_LIABILITY_CATS_R = new Set(["debt", "emi", "other_liability", "vehicle_loan"]);
@@ -852,9 +856,9 @@ app.get("/roadmap", requireUser, async (req, res) => {
     const roadmapNetWorth = totalAssetsR - totalLiabilitiesR;
 
     // ── Compute live savings rate and income from FY transactions ──────────
-    const fyStartR  = getFinancialYearStart();
-    const fyDateR   = new Date(fyStartR);
-    const nowDateR  = new Date();
+    const fyStartR = getFinancialYearStart();
+    const fyDateR = new Date(fyStartR);
+    const nowDateR = new Date();
     const monthsElapsedR = Math.max(1,
       (nowDateR.getFullYear() - fyDateR.getFullYear()) * 12 +
       (nowDateR.getMonth() - fyDateR.getMonth()) + 1
@@ -863,9 +867,9 @@ app.get("/roadmap", requireUser, async (req, res) => {
       supabaseAdmin.from('investments').select('amount').eq('user_id', req.user.id).gte('date', fyStartR),
       supabaseAdmin.from('income_entries').select('amount').eq('user_id', req.user.id).gte('date', fyStartR),
     ]);
-    const totalInvestedFYR  = (liveInvResultR.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
-    const totalIncomeFYR    = (liveIncResultR.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
-    const liveSavingsRateR  = totalIncomeFYR > 0 ? (totalInvestedFYR / totalIncomeFYR) * 100 : 0;
+    const totalInvestedFYR = (liveInvResultR.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
+    const totalIncomeFYR = (liveIncResultR.data ?? []).reduce((s, r) => s + Number(r.amount), 0);
+    const liveSavingsRateR = totalIncomeFYR > 0 ? (totalInvestedFYR / totalIncomeFYR) * 100 : 0;
     const annualisedIncomeR = (totalIncomeFYR / monthsElapsedR) * 12;
 
     const liveSavingsKeyR = totalIncomeFYR > 0
@@ -879,26 +883,26 @@ app.get("/roadmap", requireUser, async (req, res) => {
     let freshFactorScores = null;
     if (profileRow.investments && profileRow.experience && profileRow.age) {
       const fresh = calculateVALAM({
-        age:             Number(profileRow.age),
-        income:          liveIncomeKeyR,
-        savingsRate:     liveSavingsKeyR,
-        investments:     profileRow.investments,
-        experience:      profileRow.experience,
-        netWorth:        roadmapNetWorth,
-        emergencyFund:   profileRow.emergency_fund    ?? null,
+        age: Number(profileRow.age),
+        income: liveIncomeKeyR,
+        savingsRate: liveSavingsKeyR,
+        investments: profileRow.investments,
+        experience: profileRow.experience,
+        netWorth: roadmapNetWorth,
+        emergencyFund: profileRow.emergency_fund ?? null,
         highInterestDebt: profileRow.high_interest_debt ?? null,
-        healthInsurance: profileRow.health_insurance  ?? null,
+        healthInsurance: profileRow.health_insurance ?? null,
       });
       freshFactorScores = {
-        nw:              fresh.breakdown.netWorthScore,
-        wv:              fresh.breakdown.wealthVelocityScore,
-        sav:             fresh.breakdown.savingsScore,
-        inc:             fresh.breakdown.incomeScore,
-        exp:             fresh.breakdown.experienceScore,
-        fh:              fresh.breakdown.financialHealthScore,
-        emergencyFund:   profileRow.emergency_fund    ?? null,
+        nw: fresh.breakdown.netWorthScore,
+        wv: fresh.breakdown.wealthVelocityScore,
+        sav: fresh.breakdown.savingsScore,
+        inc: fresh.breakdown.incomeScore,
+        exp: fresh.breakdown.experienceScore,
+        fh: fresh.breakdown.financialHealthScore,
+        emergencyFund: profileRow.emergency_fund ?? null,
         highInterestDebt: profileRow.high_interest_debt ?? null,
-        healthInsurance: profileRow.health_insurance  ?? null,
+        healthInsurance: profileRow.health_insurance ?? null,
       };
     }
 
@@ -922,7 +926,7 @@ app.get("/roadmap", requireUser, async (req, res) => {
 
     // Asset allocation percentages
     const EQUITY_TYPES2 = new Set(['mf', 'etf', 'stock', 'crypto'])
-    const DEBT_TYPES2   = new Set(['fd', 'bond'])
+    const DEBT_TYPES2 = new Set(['fd', 'bond'])
     let eqAmt = 0, dtAmt = 0, goldAmt = 0
     for (const inv of invList2) {
       const amt = Number(inv.amount)
@@ -931,9 +935,9 @@ app.get("/roadmap", requireUser, async (req, res) => {
       else goldAmt += amt
     }
     const invTotal2 = eqAmt + dtAmt + goldAmt || 1
-    const equityPct = Math.round(eqAmt    / invTotal2 * 100)
-    const debtPct2  = Math.round(dtAmt    / invTotal2 * 100)
-    const goldPct2  = Math.round(goldAmt  / invTotal2 * 100)
+    const equityPct = Math.round(eqAmt / invTotal2 * 100)
+    const debtPct2 = Math.round(dtAmt / invTotal2 * 100)
+    const goldPct2 = Math.round(goldAmt / invTotal2 * 100)
 
     // Monthly income from live savings calculation
     const monthlyIncome = totalIncomeFYR > 0
@@ -979,10 +983,10 @@ app.get("/roadmap", requireUser, async (req, res) => {
       emergencyFundTarget,
       completedTopics,
       userGoal,
-      netWorth:    roadmapNetWorth ?? 0,
+      netWorth: roadmapNetWorth ?? 0,
       equityPct,
-      goldPct:     goldPct2,
-      debtPct:     debtPct2,
+      goldPct: goldPct2,
+      debtPct: debtPct2,
       experienceKey: profileRow.experience ?? 'beginner',
     }
 
@@ -999,10 +1003,10 @@ app.get("/roadmap", requireUser, async (req, res) => {
     if (cached && cached.scoreSnapshot === cacheKey) {
       const roadmapResult = determineNextTask(profile, learningLevel, freshFactorScores, liveContext);
       return res.json({
-        task:        roadmapResult,
-        tasks:       roadmapResult.tasks,
+        task: roadmapResult,
+        tasks: roadmapResult.tasks,
         explanation: cached.explanation,
-        source:      "cache",
+        source: "cache",
       });
     }
 
@@ -1026,17 +1030,17 @@ app.get("/roadmap", requireUser, async (req, res) => {
     }
 
     return res.json({
-      task:        roadmapResult,
-      tasks:       roadmapResult.tasks,
+      task: roadmapResult,
+      tasks: roadmapResult.tasks,
       explanation,
       source,
     });
   } catch (err) {
     console.error("[GET /roadmap] Unexpected error:", err.message);
     return res.json({
-      task:        null,
+      task: null,
       explanation: "Keep building your financial habits — check back soon for personalized guidance.",
-      source:      "error",
+      source: "error",
     });
   }
 });
@@ -1057,7 +1061,7 @@ app.get('/allocation-insights', requireUser, async (req, res) => {
     if (!profile) return res.status(404).json({ error: 'Profile not found' })
 
     const level = levelParam ?? profile.valam_level ?? 1
-    const risk  = riskParam ?? profile.risk_profile ?? 'medium'
+    const risk = riskParam ?? profile.risk_profile ?? 'medium'
     const riskLabel = risk === 'low' ? 'conservative' : risk === 'high' ? 'aggressive' : 'balanced'
     const age = Number(profile.age) || 30
 
@@ -1085,7 +1089,7 @@ app.get('/allocation-insights', requireUser, async (req, res) => {
 
     // Categorise investments (mirrors frontend lib/allocation.ts TYPE_TO_CATEGORY)
     const EQUITY_TYPES = new Set(['mf', 'etf', 'stock', 'crypto'])
-    const DEBT_TYPES   = new Set(['fd', 'bond'])
+    const DEBT_TYPES = new Set(['fd', 'bond'])
     // commodity/realestate → Gold/Other
     let actualEquity = 0, actualDebt = 0, actualGold = 0
     for (const inv of invList) {
@@ -1096,15 +1100,15 @@ app.get('/allocation-insights', requireUser, async (req, res) => {
     }
     const total = actualEquity + actualDebt + actualGold || 1
     const equityPct = Math.round(actualEquity / total * 100)
-    const debtPct   = Math.round(actualDebt   / total * 100)
-    const goldPct   = Math.round(actualGold   / total * 100)
+    const debtPct = Math.round(actualDebt / total * 100)
+    const goldPct = Math.round(actualGold / total * 100)
 
     const prompt = `VALAM user profile: Age ${age}, Level ${level}, ${riskLabel} risk investor.
 
 Their current portfolio allocation:
-- Equity (MF/ETF/Stock): ${equityPct}% (₹${Math.round(actualEquity/1000)}K)
-- Debt (FD/Bond): ${debtPct}% (₹${Math.round(actualDebt/1000)}K)
-- Gold/Other: ${goldPct}% (₹${Math.round(actualGold/1000)}K)
+- Equity (MF/ETF/Stock): ${equityPct}% (₹${Math.round(actualEquity / 1000)}K)
+- Debt (FD/Bond): ${debtPct}% (₹${Math.round(actualDebt / 1000)}K)
+- Gold/Other: ${goldPct}% (₹${Math.round(actualGold / 1000)}K)
 
 Ideal allocation for their age (${age}) and ${riskLabel} risk profile:
 - Equity: ${ideal.equity}%
@@ -1154,9 +1158,9 @@ Be precise with numbers. Do not use generic language like "consider rebalancing"
     }
     const idealEquity = getIdealEquity(age, risk)
 
-    const equityPrompt = hasMF ? `User's mutual fund portfolio (total ₹${Math.round(totalMF/1000)}K):
-${Object.entries(mfBySubtype).map(([t, amt]) => `- ${t}: ${Math.round(Number(amt)/totalMF*100)}% (₹${Math.round(Number(amt)/1000)}K)`).join('\n')}
-${unknownMF > 0 ? `- Unclassified MF: ${Math.round(unknownMF/totalMF*100)}% (₹${Math.round(unknownMF/1000)}K)` : ''}
+    const equityPrompt = hasMF ? `User's mutual fund portfolio (total ₹${Math.round(totalMF / 1000)}K):
+${Object.entries(mfBySubtype).map(([t, amt]) => `- ${t}: ${Math.round(Number(amt) / totalMF * 100)}% (₹${Math.round(Number(amt) / 1000)}K)`).join('\n')}
+${unknownMF > 0 ? `- Unclassified MF: ${Math.round(unknownMF / totalMF * 100)}% (₹${Math.round(unknownMF / 1000)}K)` : ''}
 
 Ideal equity split for age ${age}, ${riskLabel} risk:
 - Index/Large: ${idealEquity.Index}%
@@ -1222,11 +1226,11 @@ app.get("/learning/recent", requireUser, async (req, res) => {
           .single();
 
         return {
-          level:        p.level,
-          levelName:    LEVEL_NAMES[p.level - 1] ?? "",
-          topicOrder:   p.topic_order,
-          topicName:    content?.topic_name ?? "",
-          status:       p.status,
+          level: p.level,
+          levelName: LEVEL_NAMES[p.level - 1] ?? "",
+          topicOrder: p.topic_order,
+          topicName: content?.topic_name ?? "",
+          status: p.status,
           lastViewedAt: p.last_viewed_at,
         };
       })
@@ -1271,30 +1275,30 @@ app.get("/learning/:level", requireUser, async (req, res) => {
     for (const row of (content ?? [])) {
       if (!topicMap.has(row.topic_order)) {
         topicMap.set(row.topic_order, {
-          topicOrder:   row.topic_order,
-          topicName:    row.topic_name,
-          subConcepts:  [],
-          status:       progressMap.get(row.topic_order)?.status       ?? "not_started",
+          topicOrder: row.topic_order,
+          topicName: row.topic_name,
+          subConcepts: [],
+          status: progressMap.get(row.topic_order)?.status ?? "not_started",
           lastViewedAt: progressMap.get(row.topic_order)?.last_viewed_at ?? null,
-          completedAt:  progressMap.get(row.topic_order)?.completed_at   ?? null,
+          completedAt: progressMap.get(row.topic_order)?.completed_at ?? null,
         });
       }
       topicMap.get(row.topic_order).subConcepts.push({
         subConceptOrder: row.sub_concept_order,
-        subConceptName:  row.sub_concept_name,
-        explanation:     row.explanation,
-        checkQuestion:   row.check_question,
-        checkAnswer:     row.check_answer,
+        subConceptName: row.sub_concept_name,
+        explanation: row.explanation,
+        checkQuestion: row.check_question,
+        checkAnswer: row.check_answer,
       });
     }
 
     const topics = Array.from(topicMap.values());
-    const totalTopics    = topics.length;
+    const totalTopics = topics.length;
     const topicsCompleted = topics.filter(t => t.status === "completed").length;
 
     return res.json({
-      level:      levelParam,
-      levelName:  LEVEL_NAMES[levelParam - 1] ?? "",
+      level: levelParam,
+      levelName: LEVEL_NAMES[levelParam - 1] ?? "",
       topics,
       summary: {
         totalTopics,
@@ -1322,9 +1326,9 @@ app.post("/learning/progress", requireUser, async (req, res) => {
 
   try {
     const update = {
-      user_id:        req.user.id,
-      level:          Number(level),
-      topic_order:    Number(topicOrder),
+      user_id: req.user.id,
+      level: Number(level),
+      topic_order: Number(topicOrder),
       status,
       last_viewed_at: new Date().toISOString(),
     };
@@ -1354,8 +1358,8 @@ app.post('/contact', async (req, res) => {
     }
     const { name, email, message } = req.body
     await resend.emails.send({
-      from:    'VALAM <onboarding@resend.dev>',
-      to:      'valamhq@gmail.com',
+      from: 'VALAM <onboarding@resend.dev>',
+      to: 'valamhq@gmail.com',
       subject: `Contact Form from ${name}`,
       html: `
         <h2>VALAM Contact Form</h2>
@@ -1374,141 +1378,143 @@ app.post('/contact', async (req, res) => {
 
 // GET /sips — list all active/paused SIPs for the logged-in user
 app.get('/sips', requireUser, async (req, res) => {
-const userId = req.user.id
+  const userId = req.user.id
 
-const { data: sips, error } = await supabaseAdmin
-.from('sip_plans')
-.select('*')
-.eq('user_id', userId)
-.neq('status', 'cancelled')
-.order('created_at', { ascending: false })
+  const { data: sips, error } = await supabaseAdmin
+    .from('sip_plans')
+    .select('*')
+    .eq('user_id', userId)
+    .neq('status', 'cancelled')
+    .order('created_at', { ascending: false })
 
-if (error) return res.status(500).json({ error: error.message })
+  if (error) return res.status(500).json({ error: error.message })
 
-// Attach history count to each SIP
-const sipsWithCount = await Promise.all(
-(sips ?? []).map(async sip => {
-const { count } = await supabaseAdmin
-.from('investments')
-.select('*', { count: 'exact', head: true })
-.eq('sip_id', sip.id)
-return { ...sip, history_count: count ?? 0 }
-})
-)
+  // Attach history count to each SIP
+  const sipsWithCount = await Promise.all(
+    (sips ?? []).map(async sip => {
+      const { count } = await supabaseAdmin
+        .from('investments')
+        .select('*', { count: 'exact', head: true })
+        .eq('sip_id', sip.id)
+      return { ...sip, history_count: count ?? 0 }
+    })
+  )
 
-res.json({ sips: sipsWithCount })
+  res.json({ sips: sipsWithCount })
 })
 
 // POST /sips — create a new SIP plan
 app.post('/sips', requireUser, async (req, res) => {
-const userId = req.user.id
-const { investment_type, mf_type, amount,
-frequency, start_date, note } = req.body
-// Validation
-if (!investment_type || !amount || !frequency || !start_date)
-return res.status(400).json({ error: 'Missing required fields' })
-if (investment_type === 'mf' && !mf_type)
-return res.status(400).json({
-error: 'mf_type is required for Mutual Fund SIPs'
-})
+  const userId = req.user.id
+  const { investment_type, mf_type, amount,
+    frequency, start_date, note } = req.body
+  // Validation
+  if (!investment_type || !amount || !frequency || !start_date)
+    return res.status(400).json({ error: 'Missing required fields' })
+  if (investment_type === 'mf' && !mf_type)
+    return res.status(400).json({
+      error: 'mf_type is required for Mutual Fund SIPs'
+    })
 
-const today = new Date().toISOString().split('T')[0]
+  const today = new Date().toISOString().split('T')[0]
 
-// Insert the SIP plan
-const { data: sip, error } = await supabaseAdmin
-.from('sip_plans')
-.insert({
-user_id: userId,
-investment_type,
-mf_type: investment_type === 'mf' ? mf_type : null,
-amount,
-frequency,
-start_date,
-next_execution_date: start_date,
-note: note ?? null,
-})
-.select()
-.single()
+  // Insert the SIP plan
+  const { data: sip, error } = await supabaseAdmin
+    .from('sip_plans')
+    .insert({
+      user_id: userId,
+      investment_type,
+      mf_type: investment_type === 'mf' ? mf_type : null,
+      amount,
+      frequency,
+      start_date,
+      next_execution_date: start_date,
+      note: note ?? null,
+    })
+    .select()
+    .single()
 
-if (error) return res.status(500).json({ error: error.message })
+  if (error) return res.status(500).json({ error: error.message })
 
-let next_execution_date = start_date
-// If start_date is today or in the past, execute immediately
-if (start_date <= today) {
-const { data: invData, error: invError } = await supabaseAdmin
-  .from('investments')
-  .insert({
-    user_id: userId,
-    date: start_date,
-    type: investment_type,
-    mfType:
-  investment_type === "mf"
-    ? SIP_TO_INVESTMENT_MF[mf_type]
-    : null,
-    amount,
-    note: note ? `[SIP] ${note}` : `[SIP] Auto-logged ${frequency} SIP`,
-    sip_id: sip.id,
+  let next_execution_date = start_date
+  // If start_date is today or in the past, execute immediately
+  if (start_date <= today) {
+    const { data: invData, error: invError } = await supabaseAdmin
+      .from('investments')
+      .insert({
+        user_id: userId,
+        date: start_date,
+        type: investment_type,
+        mfType:
+          investment_type === "mf"
+            ? SIP_TO_INVESTMENT_MF[mf_type]
+            : null,
+        amount,
+        note: note ? `[SIP] ${note}` : `[SIP] Auto-logged ${frequency} SIP`,
+        sip_id: sip.id,
+      })
+      .select()
+
+    // Advance to next cycle
+    next_execution_date = advanceSipDate(
+      start_date, frequency, start_date
+    )
+    await supabaseAdmin
+      .from('sip_plans')
+      .update({ next_execution_date })
+      .eq('id', sip.id)
+  }
+  res.status(201).json({
+    sip: {
+      ...sip, next_execution_date:
+        next_execution_date.toISOString().slice(0, 10)
+    }
   })
-  .select()
-
-// Advance to next cycle
-next_execution_date = advanceSipDate(
-start_date, frequency, start_date
-)
-await supabaseAdmin
-.from('sip_plans')
-.update({ next_execution_date })
-.eq('id', sip.id)
-}
-res.status(201).json({
-sip: { ...sip,  next_execution_date:
-            next_execution_date.toISOString().slice(0, 10) }
-})
 })
 
 // PATCH /sips/:id — edit amount, note, or pause/resume/cancel
 app.patch('/sips/:id', requireUser, async (req, res) => {
-const userId = req.user.id
-const { id } = req.params
-const { amount, note, status } = req.body
+  const userId = req.user.id
+  const { id } = req.params
+  const { amount, note, status } = req.body
 
-const updates = { updated_at: new Date().toISOString() }
-if (amount !== undefined) updates.amount = amount
-if (note !== undefined) updates.note = note
+  const updates = { updated_at: new Date().toISOString() }
+  if (amount !== undefined) updates.amount = amount
+  if (note !== undefined) updates.note = note
 
-if (status !== undefined) {
-updates.status = status
+  if (status !== undefined) {
+    updates.status = status
 
-// When resuming: recalculate next_execution_date
-// WITHOUT backfilling missed cycles
-if (status === 'active') {
-const { data: sip } = await supabaseAdmin
-.from('sip_plans')
-.select('*')
-.eq('id', id)
-.single()
+    // When resuming: recalculate next_execution_date
+    // WITHOUT backfilling missed cycles
+    if (status === 'active') {
+      const { data: sip } = await supabaseAdmin
+        .from('sip_plans')
+        .select('*')
+        .eq('id', id)
+        .single()
 
-if (sip) {
-const today = new Date().toISOString().split('T')[0]
-let next = sip.start_date
-while (next <= today) {
-next = advanceSipDate(next, sip.frequency, sip.start_date)
-}
-updates.next_execution_date = next
-}
-}
-}
+      if (sip) {
+        const today = new Date().toISOString().split('T')[0]
+        let next = sip.start_date
+        while (next <= today) {
+          next = advanceSipDate(next, sip.frequency, sip.start_date)
+        }
+        updates.next_execution_date = next
+      }
+    }
+  }
 
-const { data, error } = await supabaseAdmin
-.from('sip_plans')
-.update(updates)
-.eq('id', id)
-.eq('user_id', userId)
-.select()
-.single()
+  const { data, error } = await supabaseAdmin
+    .from('sip_plans')
+    .update(updates)
+    .eq('id', id)
+    .eq('user_id', userId)
+    .select()
+    .single()
 
-if (error) return res.status(500).json({ error: error.message })
-res.json({ sip: data })
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ sip: data })
 })
 
 // DELETE /sips/:id — soft cancel (history is preserved)
@@ -1532,17 +1538,17 @@ app.delete('/sips/:id', requireUser, async (req, res) => {
 
 // GET /sips/:id/history — investment entries auto-logged by this SIP
 app.get('/sips/:id/history', requireUser, async (req, res) => {
-const { id } = req.params
+  const { id } = req.params
 
-const { data, error } = await supabaseAdmin
-.from('investments')
-.select('*')
-.eq('sip_id', id)
-.order('date', { ascending: false })
-.limit(10)
+  const { data, error } = await supabaseAdmin
+    .from('investments')
+    .select('*')
+    .eq('sip_id', id)
+    .order('date', { ascending: false })
+    .limit(10)
 
-if (error) return res.status(500).json({ error: error.message })
-res.json({ history: data ?? [] })
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ history: data ?? [] })
 })
 
 

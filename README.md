@@ -1,6 +1,6 @@
 # VALAM — Wealth Assessment and Level Advancement Model
 
-> "Duolingo for Investing" — a gamified personal finance platform for Indian retail investors.
+>  a gamified personal finance platform for Indian retail investors.
 
 ## Overview
 

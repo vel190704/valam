@@ -172,6 +172,7 @@ function mapProfile(row) {
     potentialLevelName:  row.potential_level_name ?? "",
     wealthVelocity:      row.wealth_velocity ?? 0,
     onboarded:        row.onboarded ?? false,
+    tourCompleted:    row.tour_completed ?? false,
     breakdown: {
       savingsScore:     row.savings_score ?? 0,
       investmentsScore: row.investments_score ?? 0,
@@ -498,6 +499,18 @@ app.patch('/profile/risk', requireUser, async (req, res) => {
   } catch (err) {
     console.error('[profile/risk] error:', err.message)
     res.status(500).json({ error: 'Failed to save risk profile' })
+  }
+})
+
+app.patch('/profile/tour', requireUser, async (req, res) => {
+  try {
+    const { error } = await supabaseAdmin
+      .from('profiles').update({ tour_completed: true }).eq('user_id', req.user.id)
+    if (error) return res.status(500).json({ error: error.message })
+    res.json({ success: true })
+  } catch (err) {
+    console.error('[profile/tour] error:', err.message)
+    res.status(500).json({ error: 'Failed to update tour status' })
   }
 })
 

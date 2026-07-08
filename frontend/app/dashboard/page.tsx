@@ -1,10 +1,11 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LEVEL_NAMES_ARR } from '@/lib/valam'
 import Link from 'next/link'
 import Disclaimer from '@/components/ui/Disclaimer'
+import DashboardTour from '@/components/ui/DashboardTour'
 
 interface DashboardData {
   name: string
@@ -125,6 +126,15 @@ export default function DashboardPage() {
   const [roadmap, setRoadmap] = useState<RoadmapResponse | null>(null)
   const [recentLearning, setRecentLearning] = useState<{ topicName: string; status: string }[]>([])
   const [achievementQueue, setAchievementQueue] = useState<Array<{ name: string; category: string; threshold: number; description: string }>>([])
+  const [showTour, setShowTour] = useState(false)
+  const refHero        = useRef<HTMLDivElement>(null)
+  const refNetWorth    = useRef<HTMLDivElement>(null)
+  const refIncome      = useRef<HTMLDivElement>(null)
+  const refMilestones  = useRef<HTMLDivElement>(null)
+  const refLearning    = useRef<HTMLDivElement>(null)
+  const refTasks       = useRef<HTMLDivElement>(null)
+  const refInvestments = useRef<HTMLDivElement>(null)
+  const refAllocation  = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     document.body.classList.toggle('dark', dark)
@@ -152,6 +162,7 @@ export default function DashboardPage() {
               valamLevelName: string; potentialScore?: number
               potentialLevel?: number; potentialLevelName?: string
               goal: string; investments: string
+              tourCompleted?: boolean
               breakdown: DashboardData['breakdown']
             }
             scoreStatus?: 'promotion' | 'regression' | 'stable'
@@ -184,6 +195,9 @@ export default function DashboardPage() {
             currentScore: json.currentScore ?? p.valamScore,
             breakdown: p.breakdown,
           })
+          if (!p.tourCompleted) {
+            setTimeout(() => setShowTour(true), 800)
+          }
           setInvestments(json.investments ?? [])
           setNetworthItems(json.networthItems ?? [])
           setSavingsRate(Math.round(json.liveSavingsRate ?? 0))
@@ -239,6 +253,25 @@ export default function DashboardPage() {
     sessionStorage.clear()
     localStorage.clear()
     router.push('/')
+  }
+
+  async function completeTour() {
+    setShowTour(false)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000'
+      await fetch(`${BASE}/profile/tour`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
+    } catch (e) {
+      console.error('[tour] failed to save completion:', e)
+    }
+  }
+
+  function skipTour() {
+    completeTour()
   }
 
   const liveScore = data?.calculatedScore ?? data?.currentScore ?? 0
@@ -380,6 +413,61 @@ export default function DashboardPage() {
     <main style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'Inter,sans-serif' }}>
       <style>{CSS}</style>
 
+      {showTour && (
+        <DashboardTour
+          onComplete={completeTour}
+          onSkip={skipTour}
+          steps={[
+            {
+              ref: refHero,
+              emoji: '🎯',
+              title: 'Your Level Progress',
+              body: 'This card shows where you are in your wealth journey and what level you can potentially reach. The 8-node path goes from Seed all the way to Legend.',
+            },
+            {
+              ref: refNetWorth,
+              emoji: '💰',
+              title: 'Net Worth',
+              body: 'Your net worth is your total financial position — investments, cash, and assets minus liabilities. Add your details here for VALAM to accurately calculate your financial level.',
+              disclaimer: 'Your data is private and encrypted. Only you can see it.',
+            },
+            {
+              ref: refIncome,
+              emoji: '📈',
+              title: 'Income & Savings',
+              body: 'Your savings rate is one of the most important factors in your VALAM score. It is calculated from your previous month\'s income and investments. Log these to get an accurate score.',
+              disclaimer: 'Your financial data is private and never shared.',
+            },
+            {
+              ref: refMilestones,
+              emoji: '🏆',
+              title: 'Milestones & Learning',
+              body: 'Milestones track your achievements as you progress. The Learning Hub has structured modules and a financial glossary to build your knowledge level by level.',
+            },
+            {
+              ref: refTasks,
+              emoji: '✅',
+              title: 'AI Tasks — Most Important',
+              body: 'This is the core of VALAM. It analyses your financial profile and suggests your highest-impact next action — personalised to your level, goals, and gaps.',
+              disclaimer: 'VALAM is not a SEBI-registered Investment Adviser. All tasks are based on educational and practical material, not personalised investment advice.',
+            },
+            {
+              ref: refInvestments,
+              emoji: '📊',
+              title: 'Total Investments',
+              body: 'Track all your investments in one place — mutual funds, ETFs, FDs, stocks, and more. Log your SIPs here to keep your wealth velocity score accurate.',
+              disclaimer: 'Your investment data is private and visible only to you.',
+            },
+            {
+              ref: refAllocation,
+              emoji: '🥧',
+              title: 'Asset Allocation',
+              body: 'One of the most important aspects of personal finance. VALAM shows your current allocation vs a suggested educational structure based on your risk profile and level. Use this to understand where you stand.',
+            },
+          ]}
+        />
+      )}
+
       {/* ACHIEVEMENT POPUP */}
       {achievementQueue.length > 0 && (
         <div style={{
@@ -518,7 +606,7 @@ export default function DashboardPage() {
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 24px 80px' }}>
 
         {/* HERO */}
-        <div style={{
+        <div ref={refHero} style={{
           background: 'var(--surface)', borderRadius: 18, padding: '20px 24px',
           border: '1px solid var(--border)', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
           marginBottom: 14
@@ -660,6 +748,7 @@ export default function DashboardPage() {
 
           {/* NET WORTH */}
           <div
+            ref={refNetWorth}
             onClick={() => router.push('/networth')}
             style={{
               background: 'var(--surface)', borderRadius: 18, padding: '18px 20px',
@@ -716,6 +805,7 @@ export default function DashboardPage() {
 
           {/* INCOME & SAVINGS */}
           <div
+            ref={refIncome}
             onClick={() => router.push('/income')}
             style={{
               background: 'var(--surface)', borderRadius: 18, padding: '18px 20px',
@@ -793,7 +883,7 @@ export default function DashboardPage() {
           </div>
 
           {/* MILESTONES */}
-          <div onClick={() => router.push('/milestones')}
+          <div ref={refMilestones} onClick={() => router.push('/milestones')}
             style={{
               background: 'var(--surface)', borderRadius: 18, padding: '18px 20px',
               border: '1px solid var(--border)', display: 'flex', flexDirection: 'column',
@@ -838,7 +928,7 @@ export default function DashboardPage() {
           </div>
 
           {/* LEARNING */}
-          <div style={{
+          <div ref={refLearning} style={{
             background: 'var(--surface)', borderRadius: 18, padding: '18px 20px',
             border: '1px solid var(--border)', display: 'flex', flexDirection: 'column'
           }}>
@@ -906,7 +996,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ── ROW 2: TASKS AND PROGRESS ── */}
-        <div style={{
+        <div ref={refTasks} style={{
           background: 'var(--surface)', borderRadius: 18, padding: '20px 22px',
           border: '1px solid var(--border)', marginBottom: 14
         }}>
@@ -1004,6 +1094,7 @@ export default function DashboardPage() {
 
           {/* COL 1: INVESTMENTS */}
           <div
+            ref={refInvestments}
             onClick={() => router.push('/portfolio')}
             style={{
               background: 'var(--surface)', borderRadius: 18, padding: '18px 20px',
@@ -1157,7 +1248,7 @@ export default function DashboardPage() {
           </div>
 
           {/* COL 3: ASSET ALLOCATION */}
-          <div onClick={() => router.push('/allocation')}
+          <div ref={refAllocation} onClick={() => router.push('/allocation')}
             style={{
               background: 'var(--surface)', borderRadius: 18, padding: '18px 20px',
               border: '1px solid var(--border)', display: 'flex', flexDirection: 'column',
